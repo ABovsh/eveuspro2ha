@@ -489,9 +489,7 @@ entities:
   - entity: switch.evse_one_charge
     name: One Charge Mode
     icon: mdi:power-plug
-  - entity: switch.evse_stop_charging2
-    name: Stop Charging 2
-    icon: mdi:power-plug-off
+  - entity: switch.evse_stop_charging
   - entity: switch.evse_reset_counter_a
     name: Reset Energy Counter
     icon: mdi:reload

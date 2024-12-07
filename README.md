@@ -6,15 +6,16 @@ The code within this repository comes with no guarantee, the use of this code is
 I take NO responsibility and/or liability for how you choose to use information available here. By using any of the files available in this repository, you understand that you are AGREEING TO USE AT YOUR OWN RISK.
 
 # Changelog comparing with original version
-1. Added description for sensors
-2. Corrected statuses mapping logic. Added sub-statuses mapping logic
-3. Fixed current management
-4. Fixed "Stop charging" logic
-5. Added SOC sensors
-6. Added Time to target sensor
-7. Added Counter A and Counter B sensors
-8. Parametrized charger user, password, ip address and car battery capacity to simplify the configuration process
-9. Added switch to reset Counter A
+1. Added descriptions for sensors: Enhanced the clarity of sensor labels.
+2. Corrected status mapping logic: Fixed the logic for mapping the statuses.
+3. Added sub-status mapping logic: Introduced additional mapping for sub-statuses.
+4. Fixed current management: Resolved issues with managing current settings.
+5. Fixed "Stop charging" logic: Corrected the logic for stopping the charging process.
+6. Added SOC sensors: Included sensors for monitoring State of Charge (SOC).
+7. Added "Time to Target" sensor: Introduced a sensor to calculate time to target SOC.
+8. Added Counter A and Counter B sensors: Integrated sensors to monitor both charging counters.
+9. Parametrized charger user, password, IP address, and car battery capacity: Simplified configuration by parameterizing sensitive values.
+10. Added switch to reset Counter A: Introduced a switch for resetting Counter A
 
 # Configuration steps
 # 1. Add secrets to /config/secrets.yaml file

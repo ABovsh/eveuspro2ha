@@ -14,25 +14,22 @@ I take NO responsibility and/or liability for how you choose to use information 
 6. Added SOC sensors: Included sensors for monitoring State of Charge (SOC).
 7. Added "Time to Target" sensor: Introduced a sensor to calculate time to target SOC.
 8. Added Counter A and Counter B sensors: Integrated sensors to monitor both charging counters.
-9. Parametrized charger user, password, IP address, and car battery capacity: Simplified configuration by parameterizing sensitive values.
+9. Parametrized charger user, password and car battery capacity: Simplified configuration by parameterizing sensitive values. NOTE: EVEUS IP ADDRESS still needs to be specified mannualy across the code. 
 10. Added switch to reset Counter A: Introduced a switch for resetting Counter A
+11. Other minor fixes and improvements
 
 # Configuration steps
 # 1. Add secrets to /config/secrets.yaml file
 ```
 eveus_username: "your charger username"
 eveus_password: "your charger password"
-eveus_ip_address: "your charger ip address"
-ev_battery_capacity: "your capacity in kWh"  # EV battery capacity
 ```
-![Screenshot 2024-12-07 132418](https://github.com/user-attachments/assets/7603a199-251b-4fd9-bd1f-697c28db1db5)
-
 # 2. Add sensors to the /config/configuration.yaml file
 ```
 # Additional sensors for EVSE
 - platform: rest
   name: EVSE Eveus
-  resource: !secret eveus_ip_address
+  resource: http://<EVEUS_IP_ADDRESS>/main
   username: !secret eveus_username
   password: !secret eveus_password
   method: POST
@@ -76,7 +73,7 @@ ev_battery_capacity: "your capacity in kWh"  # EV battery capacity
     - vBat
     - STA_IP_Addres
   value_template: "EVSE_Eveus"
-  scan_interval: 60  # Update every N seconds
+  scan_interval: 60 # Update every N seconds
 
 - platform: template
   sensors:
@@ -119,7 +116,7 @@ ev_battery_capacity: "your capacity in kWh"  # EV battery capacity
       value_template: >
         {% set state_num = state_attr('sensor.evse_eveus', 'state') | int(0) %}
         {% set substate_num = state_attr('sensor.evse_eveus', 'subState') %}
-        
+
         {% if substate_num is none %}
           unknown
         {% else %}
@@ -293,7 +290,7 @@ ev_battery_capacity: "your capacity in kWh"  # EV battery capacity
       friendly_name: "EV State of Charge (kWh)"
       value_template: >
         {% set initial_soc = states('input_number.initial_ev_soc') | float %}
-        {% set max_capacity = states('!secret ev_battery_capacity') | float %}
+        {% set max_capacity = states('input_number.ev_battery_capacity') | float(80) %}
         {% set energy_charged = states('sensor.evse_eveus_counter_a_energy') | float %}
         {% set correction_factor = states('input_number.ev_soc_correction') | float / 100 %}
         {% if initial_soc >= 0 and energy_charged >= 0 %}
@@ -308,7 +305,7 @@ ev_battery_capacity: "your capacity in kWh"  # EV battery capacity
       friendly_name: "EV State of Charge (%)"
       value_template: >
         {% set initial_soc = states('input_number.initial_ev_soc') | float %}
-        {% set max_capacity = states('!secret ev_battery_capacity') | float %}
+        {% set max_capacity = states('input_number.ev_battery_capacity') | float(80) %}
         {% set energy_charged = states('sensor.evse_eveus_counter_a_energy') | float %}
         {% set correction_factor = states('input_number.ev_soc_correction') | float / 100 %}
         {% if initial_soc >= 0 and energy_charged >= 0 %}
@@ -323,19 +320,19 @@ ev_battery_capacity: "your capacity in kWh"  # EV battery capacity
     evse_time_to_target_soc:
       friendly_name: "Time to Target SOC"
       value_template: >-
-        {% set total_capacity = states('!secret ev_battery_capacity') | float %}
+        {% set total_capacity = states('input_number.ev_battery_capacity') | float(80) %}
         {% set current_soc = states('sensor.ev_soc_percent') | float(0) %}
         {% set initial_soc = states('input_number.initial_ev_soc') | float(0) %}
         {% set energy_charged = states('sensor.evse_eveus_counter_a_energy') | float(0) %}
         {% set correction_factor = states('input_number.ev_soc_correction') | float(0) / 100 %}
         {% set charging_power = states('sensor.evse_eveus_powermeas') | float(0) %}
         {% set target_soc = states('input_number.target_soc') | float(80) %}
-        
+
         {% set target_capacity = total_capacity * target_soc / 100 %}
         {% set current_capacity = total_capacity * current_soc / 100 %}
-        
+
         {% set remaining_capacity_kwh = target_capacity - current_capacity %}
-        
+
         {% if current_soc >= target_soc %}
           SOC is already at or above target
         {% else %}
@@ -363,53 +360,26 @@ ev_battery_capacity: "your capacity in kWh"  # EV battery capacity
           {% endif %}
         {% endif %}
 ```
-# 2. Add switches to the /config/configuration.yaml file
-```
-command_line:
-  - switch:
-      name: Eveus reset counter A
-      unique_id: evse_eveus_reset_counter_a
-      command_on: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=rstEM1&rstEM1=0"
-      command_off: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=rstEM1&rstEM1=0"
-      command_state: >
-        curl -s -u !secret eveus_username:!secret eveus_password "http://!secret eveus_ip_address/main" | jq ".IEM1"
-      value_template: '{{ value | int(0) == 0 }}'
-
-  - switch:
-      name: Eveus stop charging
-      unique_id: evse_eveus_stop_charging
-      command_on: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=evseEnabled&evseEnabled=1"
-      command_off: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=evseEnabled&evseEnabled=0"
-      command_state: >
-        curl -s -u !secret eveus_username:!secret eveus_password "http://!secret eveus_ip_address/main" | jq ".evseEnabled"
-      value_template: '{{ value == "1" }}'
-
-  - switch:
-      name: Eveus OneCharge
-      unique_id: evse_eveus_one_charge
-      command_on: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=oneCharge&oneCharge=1"
-      command_off: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=oneCharge&oneCharge=0"
-      command_state: >
-        curl -s -u !secret eveus_username:!secret eveus_password "http://!secret eveus_ip_address/main" | jq ".oneCharge"
-      value_template: '{{ value == "1" }}'
-```
 # 3. Add current regulator into /config/configuration.yaml
 ```
 shell_command:
-  evse_current_incr: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://!secret eveus_ip_address/pageEvent' -d \"currentSet=$(($(curl -s -u !secret eveus_username:!secret eveus_password -X POST 'http://!secret eveus_ip_address/main' | jq '.currentSet')+1))\""
-  evse_current_decr: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://!secret eveus_ip_address/pageEvent' -d \"currentSet=$(($(curl -s -u !secret eveus_username:!secret eveus_password -X POST 'http://!secret eveus_ip_address/main' | jq '.currentSet')-1))\""
-  evse_current_set: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://!secret eveus_ip_address/pageEvent' -d \"currentSet={{ '%02d'|format(states('input_number.evse_eveus_current')|int) }}\""
+  evse_current_incr: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://<EVEUS_IP_ADDRESS>/pageEvent' -d \"currentSet=$(($(curl -s -u !secret eveus_username:!secret eveus_password -X POST 'http://<EVEUS_IP_ADDRESS>/main' | jq '.currentSet')+1))\""
+  evse_current_decr: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://<EVEUS_IP_ADDRESS>/pageEvent' -d \"currentSet=$(($(curl -s -u !secret eveus_username:!secret eveus_password -X POST 'http://<EVEUS_IP_ADDRESS>/main' | jq '.currentSet')-1))\""
+  evse_current_set: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://<EVEUS_IP_ADDRESS>/pageEvent' -d \"currentSet={{ '%02d'|format(states('input_number.evse_eveus_current')|int) }}\""
 
 ```
 # 4. Add input numbers into /config/configuration.yaml
 ```
 input_number:
+  ev_battery_capacity:
+    name: "EV Battery Capacity (kWh)"
+    min: 10
+    max: 100
+    step: 1
+    mode: slider
+    unit_of_measurement: "kWh"
+    icon: mdi:car
+
   initial_ev_soc:
     name: Initial EV State of Charge (%)
     min: 0
@@ -420,11 +390,11 @@ input_number:
 
   ev_soc_correction:
     name: SOC Correction Factor (%)
-    min: 5
-    max: 10  #Adjust the max if needed
+    min: 0
+    max: 10
     step: 0.1
-    initial: 7.5  #Default value
-    mode: slider  #Optional
+    initial: 7.5
+    mode: slider
     icon: mdi:TuneVariant
 
   target_soc:
@@ -432,18 +402,54 @@ input_number:
     min: 80
     max: 100
     step: 10
-    initial: 80  #Default target SOC
-    mode: slider  #Optional
-    icon: mdi:Battery
+    initial: 80
+    mode: slider
+    icon: mdi:battery-charging-high
 
   evse_eveus_current:
     name: Charger Set Current
     min: 8
-    max: 32
+    max: 16
     step: 1
-    initial: 16  #Default value
-    mode: slider  #Optional
+    initial: 16
+    mode: slider
     icon: mdi:current-dc
+```
+# 5. Add switches into /config/configuration.yaml
+```
+command_line:
+  - switch:
+      name: Eveus reset counter A
+      unique_id: evse_eveus_reset_counter_a
+      command_on: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=rstEM1&rstEM1=0"
+      command_off: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=rstEM1&rstEM1=0"
+      command_state: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r ".IEM1"
+      value_template: '{{ value | int == 0 }}'  # Checks if the value of IEM1 is 0 (reset state)
+
+  - switch:
+      name: Eveus stop charging
+      unique_id: evse_eveus_stop_charging
+      command_on: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=evseEnabled&evseEnabled=1"
+      command_off: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=evseEnabled&evseEnabled=0"
+      command_state: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r ".evseEnabled"
+      value_template: '{{ value == "1" }}'  # Checks if the value of evseEnabled is 1 (charging stopped)
+
+  - switch:
+      name: Eveus OneCharge
+      unique_id: evse_eveus_one_charge
+      command_on: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=oneCharge&oneCharge=1"
+      command_off: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=oneCharge&oneCharge=0"
+      command_state: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r ".oneCharge"
+      value_template: '{{ value == 1 }}'
 ```
 # 5. Validate configuration in Home Assistant
 Configuration -> Server Controls
@@ -472,6 +478,12 @@ entities:
   - entity: sensor.evse_eveus_substate
     name: Substate
     icon: mdi:car-cog
+  - entity: sensor.evse_eveus_powermeas
+    name: Power (W)
+    icon: mdi:flash
+  - entity: sensor.evse_eveus_counter_a_energy
+    name: Session Energy (kWh)
+    icon: mdi:counter
   - entity: input_number.evse_eveus_current
     name: Current (A)
     icon: mdi:current-ac
@@ -481,23 +493,24 @@ entities:
   - entity: input_number.target_soc
     name: Target SOC (%)
     icon: mdi:target
-  - entity: sensor.evse_eveus_powermeas
-    name: Power (W)
-    icon: mdi:flash
-  - entity: sensor.evse_eveus_counter_a_energy
-    name: Session Energy (kWh)
-    icon: mdi:counter
+  - entity: input_number.ev_soc_correction
+    name: SOC Correction (%)
+    icon: mdi:chart-bell-curve
+  - entity: input_number.ev_battery_capacity
+    name: Battery Capacity (kWh)
+    icon: mdi:car-battery
   - entity: switch.evse_one_charge
     name: One Charge Mode
     icon: mdi:power-plug
   - entity: switch.evse_stop_charging
+    name: Stop Charging
+    icon: mdi:stop-circle
   - entity: switch.evse_reset_counter_a
     name: Reset Energy Counter
     icon: mdi:reload
-  - entity: input_number.ev_soc_correction
 show_header_toggle: false
 ```
-![Screenshot 2024-12-05 224217](https://github.com/user-attachments/assets/03e2573c-a313-4db9-9bb6-7870d10f39df)
+![Screenshot 2024-12-07 201052](https://github.com/user-attachments/assets/228a7e7a-8b9c-4c13-a1e8-7d384326370c)
 
 # SOC CALCULATION
 For proper SOC calculation it`s important to:

@@ -5,14 +5,6 @@ The code within this repository comes with no guarantee, the use of this code is
 
 I take NO responsibility and/or liability for how you choose to use information available here. By using any of the files available in this repository, you understand that you are AGREEING TO USE AT YOUR OWN RISK.
 
-# Info
-
-Replace the following attributes below in the code with your actual values:
-1. http://<IP_Address>/main - specify your Eveus charger IP address. Example - http://192.168.1.1/main
-2. <EVEUS_USER>
-3. <EVEUS_PASSWORD>
-4. <EV_BATTERY_CAPACITY_IN_KWH>
-
 # Changelog comparing with original version
 1. Added description for sensors
 2. Corrected statuses mapping logic. Added sub-statuses mapping logic
@@ -21,16 +13,26 @@ Replace the following attributes below in the code with your actual values:
 5. Added SOC sensors
 6. Added Time to target sensor
 7. Added Counter A and Counter B sensors
+8. Parametrized charger user, password, ip address and car battery capacity to simplify the configuration process
 
 # Configuration steps
-# 1. Add sensors to the /config/configuration.yaml file
+# 1. Add secrets to /config/secrets.yaml file
 ```
-#Sensors for Eveus car charger
+eveus_ip: "your charger ip address"
+eveus_user: "your charger user"
+eveus_password: "your charger password"
+ev_battery_capacity: "your car battery capacity in kwh"
+```
+![Screenshot 2024-12-07 132418](https://github.com/user-attachments/assets/7603a199-251b-4fd9-bd1f-697c28db1db5)
+
+# 2. Add sensors to the /config/configuration.yaml file
+```
+# Additional sensors for EVSE
 - platform: rest
   name: EVSE Eveus
-  resource: http://<IP_Address>/main
-  username: <EVEUS_USER>
-  password: <EVEUS_PASSWORD>
+  resource: !secret eveus_ip_address
+  username: !secret eveus_username
+  password: !secret eveus_password
   method: POST
   json_attributes:
     - evseEnabled
@@ -72,11 +74,11 @@ Replace the following attributes below in the code with your actual values:
     - vBat
     - STA_IP_Addres
   value_template: "EVSE_Eveus"
-  scan_interval: 60  #Update every N seconds
+  scan_interval: 60  # Update every N seconds
 
 - platform: template
   sensors:
-    #Sensor for session duration formatted as time
+    # Sensor for session duration formatted as time
     evse_eveus_newsessiontime:
       friendly_name: "eveus session duration"
       value_template: >-
@@ -88,12 +90,12 @@ Replace the following attributes below in the code with your actual values:
         {% set minutes = (uptime % 3600) // 60 %}
         {{ '%dy ' % years if years else '' }}{{ '%dm ' % months if months else '' }}{{ '%dd ' % days if days else '' }}{{ '%dh ' % hours if hours else '' }}{{ '%dm' % minutes if minutes else '' }}
 
-    #Sensor for EVSE enabled status
+    # Sensor for EVSE enabled status
     evse_eveus_enabled:
       value_template: "{{ state_attr('sensor.evse_eveus', 'evseEnabled') }}"
       friendly_name: "EVSE Enabled"
 
-    #Sensor for EVSE state with human-readable description
+    # Sensor for EVSE state with human-readable description
     evse_eveus_state:
       value_template: >
         {% set mapper =  {
@@ -110,7 +112,7 @@ Replace the following attributes below in the code with your actual values:
         {{ mapper[state_num] if state_num in mapper else 'Unknown' }}
       friendly_name: "Charger State"
 
-    #Sensor for EVSE sub-state with human-readable description
+    # Sensor for EVSE sub-state with human-readable description
     evse_eveus_substate:
       value_template: >
         {% set state_num = state_attr('sensor.evse_eveus', 'state') | int(0) %}
@@ -157,134 +159,139 @@ Replace the following attributes below in the code with your actual values:
         {% endif %}
       friendly_name: "Charger Substate"
 
-    #Sensor for current set in amperes
+    # Sensor for current set in amperes
     evse_eveus_currentset:
       value_template: "{{ state_attr('sensor.evse_eveus', 'currentSet') }}"
       friendly_name: "Current set"
       unit_of_measurement: "A"
 
-    #Sensor for current designed in amperes
+    # Sensor for current designed in amperes
     evse_eveus_curdesign:
       value_template: "{{ state_attr('sensor.evse_eveus', 'curDesign') }}"
       unit_of_measurement: "A"
       friendly_name: "Current designed"
 
-    #Sensor for voltage measurement 1
+    # Sensor for voltage measurement 1
     evse_eveus_voltmeas1:
       value_template: "{{ state_attr('sensor.evse_eveus', 'voltMeas1') | round(1) }}"
       unit_of_measurement: "V"
       friendly_name: "Voltage"
 
-    #Sensor for current measurement 1
+    # Sensor for current measurement 1
     evse_eveus_curmeas1:
       value_template: "{{ state_attr('sensor.evse_eveus', 'curMeas1') | round(1) }}"
       unit_of_measurement: "A"
       friendly_name: "Charger Current"
 
-    #Sensor for power measurement in watts
+    # Sensor for power measurement in watts
     evse_eveus_powermeas:
       value_template: "{{ state_attr('sensor.evse_eveus', 'powerMeas') | round(1) }}"
       unit_of_measurement: "W"
       friendly_name: "Charger Power"
 
-    #Sensor for temperature of the box
+    # Sensor for temperature of the box
     evse_eveus_temperature1:
       value_template: "{{ state_attr('sensor.evse_eveus', 'temperature1') }}"
       unit_of_measurement: "°C"
       friendly_name: "Temp of box"
 
-    #Sensor for temperature of the plug
+    # Sensor for temperature of the plug
     evse_eveus_temperature2:
       value_template: "{{ state_attr('sensor.evse_eveus', 'temperature2') }}"
       unit_of_measurement: "°C"
       friendly_name: "Temp of plug"
 
-    #Sensor for ground status
+    # Sensor for ground status
     evse_eveus_ground:
       value_template: "{% if state_attr('sensor.evse_eveus', 'ground') == 1 %}Yes{% else %}No{% endif %}"
       friendly_name: "Ground"
 
-    #Sensor for ground control status
+    # Sensor for ground control status
     evse_eveus_groundctrl:
       value_template: "{% if state_attr('sensor.evse_eveus', 'groundCtrl') == 2 %}Yes{% else %}No{% endif %}"
       friendly_name: "Ground control"
 
-    #Sensor for adaptive mode voltage
+    # Sensor for adaptive mode voltage
     evse_eveus_aivoltage:
       value_template: "{{ state_attr('sensor.evse_eveus', 'aiVoltage') }}"
       unit_of_measurement: "V"
       friendly_name: "Adaptive mode voltage"
 
-    #Sensor for adaptive mode current
+    # Sensor for adaptive mode current
     evse_eveus_aicurrent:
       value_template: "{{ state_attr('sensor.evse_eveus', 'aiModecurrent') }}"
       unit_of_measurement: "A"
       friendly_name: "Adaptive mode current"
 
-    #Sensor for session energy
+    # Sensor for session energy
     evse_eveus_sessionenergy:
       value_template: "{{ (state_attr('sensor.evse_eveus', 'sessionEnergy') | float) | round(1) }}"
       unit_of_measurement: "kWh"
       friendly_name: "Session Energy"
 
-    #Sensor for session time
+    # Sensor for session time
     evse_eveus_sessiontime:
       value_template: "{{ state_attr('sensor.evse_eveus', 'sessionTime') }}"
       unit_of_measurement: "s"
       friendly_name: "Session Time"
 
-    #Sensor for total energy
+    # Sensor for total energy
     evse_eveus_totalenergy:
       value_template: "{{ (state_attr('sensor.evse_eveus', 'totalEnergy') | float) | round(1) }}"
       unit_of_measurement: "kWh"
       friendly_name: "Total Energy"
 
-    #Sensor for AI status
+    # Sensor for AI status
     evse_eveus_aistatus:
       value_template: "{{ state_attr('sensor.evse_eveus', 'aiStatus') }}"
       friendly_name: "Adaptive mode status"
 
-    #Sensor for battery voltage
+    # Sensor for battery voltage
     evse_eveus_vbat:
       value_template: "{{ state_attr('sensor.evse_eveus', 'vBat') }}"
       unit_of_measurement: "V"
       friendly_name: "Battery voltage"
 
-    #Sensor for system time
+    # Sensor for system time
     evse_eveus_systemtime:
       value_template: "{{ state_attr('sensor.evse_eveus', 'systemTime') }}"
       friendly_name: "System Time"
 
-    #Sensor for Counter A Energy
+    # Sensor for current time
+    current_time:
+      friendly_name: "Current Time"
+      value_template: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+    # Sensor for Counter A Energy
     evse_eveus_counter_a_energy:
       friendly_name: "Counter A Energy (kWh)"
       value_template: "{{ state_attr('sensor.evse_eveus', 'IEM1') | round(2) }}"
       unit_of_measurement: "kWh"
 
-    #Sensor for Counter A Cost
+    # Sensor for Counter A Cost
     evse_eveus_counter_a_cost:
       friendly_name: "Counter A Cost"
       value_template: "{{ state_attr('sensor.evse_eveus', 'IEM1_money') | round(2) }}"
       unit_of_measurement: "₴"
 
-    #Sensor for Counter B Energy
+    # Sensor for Counter B Energy
     evse_eveus_counter_b_energy:
       friendly_name: "Counter B Energy (kWh)"
       value_template: "{{ state_attr('sensor.evse_eveus', 'IEM2') | round(2) }}"
       unit_of_measurement: "kWh"
 
-    #Sensor for Counter B Cost
+    # Sensor for Counter B Cost
     evse_eveus_counter_b_cost:
       friendly_name: "Counter B Cost"
       value_template: "{{ state_attr('sensor.evse_eveus', 'IEM2_money') | round(2) }}"
       unit_of_measurement: "₴"
 
-    #Sensor for EV SOC in kWh using Counter A and initial SOC
+    # Sensor for EV SOC in kWh using Counter A and initial SOC
     ev_soc_kwh:
       friendly_name: "EV State of Charge (kWh)"
       value_template: >
         {% set initial_soc = states('input_number.initial_ev_soc') | float %}
-        {% set max_capacity = <EV_BATTERY_CAPACITY_IN_KWH> %}
+        {% set max_capacity = states('!secret ev_battery_capacity') | float %}
         {% set energy_charged = states('sensor.evse_eveus_counter_a_energy') | float %}
         {% set correction_factor = states('input_number.ev_soc_correction') | float / 100 %}
         {% if initial_soc >= 0 and energy_charged >= 0 %}
@@ -294,12 +301,12 @@ Replace the following attributes below in the code with your actual values:
         {% endif %}
       unit_of_measurement: "kWh"
 
-    #Sensor for EV SOC in percentage using Counter A and initial SOC
+    # Sensor for EV SOC in percentage using Counter A and initial SOC
     ev_soc_percent:
       friendly_name: "EV State of Charge (%)"
       value_template: >
         {% set initial_soc = states('input_number.initial_ev_soc') | float %}
-        {% set max_capacity = <EV_BATTERY_CAPACITY_IN_KWH> %}
+        {% set max_capacity = states('!secret ev_battery_capacity') | float %}
         {% set energy_charged = states('sensor.evse_eveus_counter_a_energy') | float %}
         {% set correction_factor = states('input_number.ev_soc_correction') | float / 100 %}
         {% if initial_soc >= 0 and energy_charged >= 0 %}
@@ -310,11 +317,11 @@ Replace the following attributes below in the code with your actual values:
         {% endif %}
       unit_of_measurement: "%"
 
-    #Sensor for Time to Target SOC considering losses
+    # Sensor for Time to Target SOC considering losses
     evse_time_to_target_soc:
       friendly_name: "Time to Target SOC"
       value_template: >-
-        {% set total_capacity = <EV_BATTERY_CAPACITY_IN_KWH> %}
+        {% set total_capacity = states('!secret ev_battery_capacity') | float %}
         {% set current_soc = states('sensor.ev_soc_percent') | float(0) %}
         {% set initial_soc = states('input_number.initial_ev_soc') | float(0) %}
         {% set energy_charged = states('sensor.evse_eveus_counter_a_energy') | float(0) %}
@@ -358,27 +365,45 @@ Replace the following attributes below in the code with your actual values:
 ```
 command_line:
   - switch:
-      name: EVSE Stop Charging
-      unique_id: evse_eveus_stop_charging
-      command_on: 'curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<IP_Address>/pageEvent" -d "pageevent=evseEnabled&evseEnabled=1"'
-      command_off: 'curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<IP_Address>/pageEvent" -d "pageevent=evseEnabled&evseEnabled=0"'
-      command_state: 'curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST "http://<IP_Address>/main" | jq ".evseEnabled"'
-      value_template: '{{ value == "1" }}'  #ON if evseEnabled is 1, OFF if evseEnabled is 0
+      name: Eveus reset counter A
+      unique_id: evse_eveus_reset_counter_a
+      command_on: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=rstEM1&rstEM1=0"
+      command_off: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=rstEM1&rstEM1=0"
+      command_state: >
+        curl -s -u !secret eveus_username:!secret eveus_password "http://!secret eveus_ip_address/main" | jq ".IEM1"
+      value_template: '{{ value | int(0) == 0 }}'
 
   - switch:
-      name: EVSE OneCharge
+      name: Eveus stop charging
+      unique_id: evse_eveus_stop_charging
+      command_on: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=evseEnabled&evseEnabled=1"
+      command_off: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=evseEnabled&evseEnabled=0"
+      command_state: >
+        curl -s -u !secret eveus_username:!secret eveus_password "http://!secret eveus_ip_address/main" | jq ".evseEnabled"
+      value_template: '{{ value == "1" }}'
+
+  - switch:
+      name: Eveus OneCharge
       unique_id: evse_eveus_one_charge
-      command_on: 'curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<IP_Address>/pageEvent" -d "pageevent=oneCharge&oneCharge=1"'
-      command_off: 'curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<IP_Address>/pageEvent" -d "pageevent=oneCharge&oneCharge=0"'
-      command_state: 'curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST "http://<IP_Address>/main" | jq ".oneCharge"'
-      value_template: '{{ value == "1" }}'  #ON if oneCharge is 1, OFF if oneCharge is 0
+      command_on: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=oneCharge&oneCharge=1"
+      command_off: >
+        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://!secret eveus_ip_address/pageEvent" -d "pageevent=oneCharge&oneCharge=0"
+      command_state: >
+        curl -s -u !secret eveus_username:!secret eveus_password "http://!secret eveus_ip_address/main" | jq ".oneCharge"
+      value_template: '{{ value == "1" }}'
 ```
 # 3. Add current regulator into /config/configuration.yaml
 ```
 shell_command:
-  evse_current_incr: "curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://<IP_Address>/pageEvent' -d \"currentSet=$(($(curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST 'http://<IP_Address>/main' | jq '.currentSet')+1))\""
-  evse_current_decr: "curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://<IP_Address>/pageEvent' -d \"currentSet=$(($(curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST 'http://<IP_Address>/main' | jq '.currentSet')-1))\""
-  evse_current_set: "curl -s -u <EVEUS_USER>:<EVEUS_PASSWORD> -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://<IP_Address>/pageEvent' -d \"currentSet={{ '%02d'|format(states('input_number.evse_eveus_current')|int) }}\""
+  evse_current_incr: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://!secret eveus_ip_address/pageEvent' -d \"currentSet=$(($(curl -s -u !secret eveus_username:!secret eveus_password -X POST 'http://!secret eveus_ip_address/main' | jq '.currentSet')+1))\""
+  evse_current_decr: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://!secret eveus_ip_address/pageEvent' -d \"currentSet=$(($(curl -s -u !secret eveus_username:!secret eveus_password -X POST 'http://!secret eveus_ip_address/main' | jq '.currentSet')-1))\""
+  evse_current_set: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://!secret eveus_ip_address/pageEvent' -d \"currentSet={{ '%02d'|format(states('input_number.evse_eveus_current')|int) }}\""
+
 ```
 # 4. Add input numbers into /config/configuration.yaml
 ```

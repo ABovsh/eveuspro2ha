@@ -14,6 +14,7 @@ I take NO responsibility and/or liability for how you choose to use information 
 6. Added Time to target sensor
 7. Added Counter A and Counter B sensors
 8. Parametrized charger user, password, ip address and car battery capacity to simplify the configuration process
+9. Added switch to reset Counter A
 
 # Configuration steps
 # 1. Add secrets to /config/secrets.yaml file

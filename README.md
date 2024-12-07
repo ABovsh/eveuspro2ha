@@ -19,10 +19,10 @@ I take NO responsibility and/or liability for how you choose to use information 
 # Configuration steps
 # 1. Add secrets to /config/secrets.yaml file
 ```
-eveus_ip: "your charger ip address"
-eveus_user: "your charger user"
+eveus_username: "your charger username"
 eveus_password: "your charger password"
-ev_battery_capacity: "your car battery capacity in kwh"
+eveus_ip_address: "your charger ip address"
+ev_battery_capacity: "your capacity in kWh"  # EV battery capacity
 ```
 ![Screenshot 2024-12-07 132418](https://github.com/user-attachments/assets/7603a199-251b-4fd9-bd1f-697c28db1db5)
 

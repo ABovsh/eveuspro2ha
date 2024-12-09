@@ -591,85 +591,148 @@ type: horizontal-stack
 cards:
   - type: custom:button-card
     entity: switch.evse_reset_counter_a
-    color_type: card
-    color: rgb(34, 139, 34)
-    icon: mdi:reload
     name: Reset
-    show_state: false
-    tap_action:
-      action: more-info
-      haptic: medium
-    hold_action:
-      action: toggle
-    size: 15%
+    icon: mdi:reload
+    size: 30%
+    color_type: card
+    color: "#3949AB"
     styles:
       card:
-        - border-radius: 10px
-        - box-shadow: 0 2px 4px rgba(0,0,0,0.1)
+        - border-radius: 12px
+        - height: 55px
+        - padding: 4px
+        - margin: 2px
+      name:
+        - font-size: 12px
+        - font-weight: bold
+        - padding-top: 4px
+        - color: "#43749f"
+      icon:
+        - width: 24px
+        - color: "#FFFFFF"
+    tap_action:
+      action: toggle
+      confirmation:
+        text: Reset the energy counter?
+      haptic: light
+    hold_action:
+      action: more-info
+      haptic: light
     state:
-      - value: "on"
-        styles:
-          icon:
-            - color: white
       - value: "off"
         styles:
+          card:
+            - background-color: transparent
           icon:
-            - color: ba
+            - color: "#43749f"
+          name:
+            - color: "#43749f"
+      - value: "on"
+        styles:
+          card:
+            - opacity: 0.7
+            - background-color: "#FF5722"
+          name:
+            - color: "#FFFFFF"
   - type: custom:button-card
     entity: switch.evse_one_charge
-    color_type: card
-    color: rgb(34, 139, 34)
-    icon: mdi:power-plug
     name: Charge
-    show_state: false
+    icon: mdi:ev-station
+    size: 35%
+    color_type: card
+    color: "#2E7D32"
     tap_action:
-      action: more-info
-      haptic: medium
-    hold_action:
       action: toggle
-    size: 15%
+      haptic: light
+    hold_action:
+      action: more-info
+      haptic: light
     styles:
       card:
-        - border-radius: 10px
-        - box-shadow: 0 2px 4px rgba(0,0,0,0.1)
+        - border-radius: 12px
+        - height: 55px
+        - padding: 4px
+        - margin: 2px
+      name:
+        - font-size: 12px
+        - font-weight: bold
+        - padding-top: 4px
+        - color: "#FFFFFF"
+      icon:
+        - width: 30px
+        - color: "#43749f"
     state:
-      - value: "on"
-        styles:
-          icon:
-            - color: white
       - value: "off"
         styles:
+          card:
+            - background-color: transparent
           icon:
-            - color: white
+            - color: "#43749f"
+          name:
+            - color: "#43749f"
+      - value: "on"
+        color: "#388E3C"
+        styles:
+          card:
+            - background-color: "#2E7D32"
+            - animation: pulse 2s infinite
+          name:
+            - color: "#FFFFFF"
+          icon:
+            - color: "#FFFFFF"
   - type: custom:button-card
     entity: switch.evse_stop_charging
-    color_type: card
-    color: rgb(230, 40, 40)
-    icon: mdi:stop-circle-outline
     name: Stop
-    show_state: false
+    icon: mdi:stop-circle-outline
+    size: 35%
+    color_type: card
+    color: "#C62828"
     tap_action:
-      action: more-info
-      haptic: medium
-    hold_action:
       action: toggle
-    size: 15%
+      confirmation:
+        text: Stop charging session?
+      haptic: light
+    hold_action:
+      action: more-info
+      haptic: light
     styles:
       card:
-        - border-radius: 10px
-        - box-shadow: 0 2px 4px rgba(0,0,0,0.1)
+        - border-radius: 12px
+        - height: 55px
+        - padding: 4px
+        - margin: 2px
+      name:
+        - font-size: 12px
+        - font-weight: bold
+        - padding-top: 4px
+        - color: "#FFFFFF"
+      icon:
+        - width: 30px
+        - color: "#43749f"
     state:
-      - value: "on"
-        styles:
-          icon:
-            - color: white
       - value: "off"
         styles:
+          card:
+            - background-color: transparent
           icon:
-            - color: white
+            - color: "#43749f"
+          name:
+            - color: "#43749f"
+      - value: "on"
+        color: "#D32F2F"
+        styles:
+          card:
+            - background-color: "#C62828"
+            - animation: pulse 1s infinite
+          name:
+            - color: "#FFFFFF"
+          icon:
+            - color: "#FFFFFF"
 ```
-![Screenshot 2024-12-09 204558](https://github.com/user-attachments/assets/1c5b8597-cc29-4a47-9496-10c965dcfe14)
-![Screenshot 2024-12-09 204536](https://github.com/user-attachments/assets/1d75a1b2-c7ff-4944-bf38-dc5937430619)
+Enabled:
+![Screenshot 2024-12-10 001923](https://github.com/user-attachments/assets/e13c5f36-251b-4590-92bb-1059396461d0)
+Disabled:
+![Screenshot 2024-12-10 002041](https://github.com/user-attachments/assets/8dfec758-743c-4781-9e6a-c6a1eeb2db75)
 # SOC CALCULATION
 For proper SOC calculation it`s important to:
 1. Set your EV Battery capacity (one time action)

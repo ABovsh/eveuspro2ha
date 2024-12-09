@@ -729,9 +729,9 @@ cards:
           icon:
             - color: "#FFFFFF"
 ```
-Enabled:
+1. Enabled:
 ![Screenshot 2024-12-10 001923](https://github.com/user-attachments/assets/e13c5f36-251b-4590-92bb-1059396461d0)
-Disabled:
+2. Disabled:
 ![Screenshot 2024-12-10 002041](https://github.com/user-attachments/assets/8dfec758-743c-4781-9e6a-c6a1eeb2db75)
 # SOC CALCULATION
 For proper SOC calculation it`s important to:

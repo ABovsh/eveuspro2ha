@@ -420,7 +420,7 @@ input_number:
 command_line:
   - switch:
       name: Eveus reset counter A
-      unique_id: evse_eveus_reset_counter_a
+      unique_id: evse_reset_counter_a
       command_on: >
         curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=rstEM1&rstEM1=0"
       command_off: >
@@ -431,7 +431,7 @@ command_line:
 
   - switch:
       name: Eveus stop charging
-      unique_id: evse_eveus_stop_charging
+      unique_id: evse_stop_charging
       command_on: >
         curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=evseEnabled&evseEnabled=1"
       command_off: >
@@ -442,7 +442,7 @@ command_line:
 
   - switch:
       name: Eveus OneCharge
-      unique_id: evse_eveus_one_charge
+      unique_id: evse_one_charge
       command_on: >
         curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=oneCharge&oneCharge=1"
       command_off: >
@@ -451,15 +451,15 @@ command_line:
         curl -s -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r ".oneCharge"
       value_template: '{{ value == 1 }}'
 ```
-# 5. Validate configuration in Home Assistant
+# 6. Validate configuration in Home Assistant
 Configuration -> Server Controls
 Press `CHECK CONFIGURATION` button in `Check Configuration` section
 
-# 6. Restart HA server
+# 7. Restart HA server
 Configuration -> Server Controls
 Press `RESTART` in `Server managementn` section
 
-# 7. Create an entity card in your Home Assistant dashboard
+# 8. Create an entity card in your Home Assistant dashboard
 ```
 type: entities
 entities:
@@ -472,18 +472,21 @@ entities:
   - entity: sensor.evse_time_to_target_soc
     name: Time to Target
     icon: mdi:clock-time-four
+  - type: divider
   - entity: sensor.evse_eveus_state
     name: Charger State
     icon: mdi:car-electric
   - entity: sensor.evse_eveus_substate
     name: Substate
     icon: mdi:car-cog
+  - type: divider
   - entity: sensor.evse_eveus_powermeas
     name: Power (W)
     icon: mdi:flash
   - entity: sensor.evse_eveus_counter_a_energy
     name: Session Energy (kWh)
     icon: mdi:counter
+  - type: divider
   - entity: input_number.evse_eveus_current
     name: Current (A)
     icon: mdi:current-ac
@@ -499,6 +502,7 @@ entities:
   - entity: input_number.ev_battery_capacity
     name: Battery Capacity (kWh)
     icon: mdi:car-battery
+  - type: divider
   - entity: switch.evse_one_charge
     name: One Charge Mode
     icon: mdi:power-plug
@@ -510,11 +514,168 @@ entities:
     icon: mdi:reload
 show_header_toggle: false
 ```
-![Screenshot 2024-12-07 201052](https://github.com/user-attachments/assets/228a7e7a-8b9c-4c13-a1e8-7d384326370c)
+![Screenshot 2024-12-09 204029](https://github.com/user-attachments/assets/87db7d47-08ab-4098-b877-e57b3bdc6c25)
+# 9. Create modern control elements
+1. Install slider button card from this repo - https://github.com/mattieha/slider-button-card
+2. Create sliders by using this code:
+```
+type: horizontal-stack
+cards:
+  - type: custom:slider-button-card
+    entity: input_number.evse_eveus_current
+    name: Current
+    compact: true
+    slider:
+      direction: left-right
+      background: gradient
+      use_state_color: true
+      show_track: true
+      min: 8
+      max: 16
+      step: 1
+    icon:
+      show: true
+      icon: mdi:flash
+      tap_action:
+        action: more-info
+    show_name: true
+    show_state: true
+    show_attribute: false
+    action_button:
+      show: false
+    style: |
+      .card-header {
+        font-size: 12px;  # Reduced font size for compact mode
+        font-weight: bold;
+      }
+      .slider-button-card .slider {
+        margin-top: 5px;  # Add space between the name and the slider
+      }
+  - type: custom:slider-button-card
+    entity: input_number.initial_ev_soc
+    name: Init SOC
+    compact: true
+    slider:
+      direction: left-right
+      background: gradient
+      use_state_color: true
+      show_track: true
+      min: 0
+      max: 100
+      step: 1
+    icon:
+      show: true
+      icon: mdi:battery
+      tap_action:
+        action: more-info
+    show_name: true
+    show_state: true
+    show_attribute: false
+    action_button:
+      show: false
+    style: |
+      .card-header {
+        font-size: 12px;  # Reduced font size for compact mode
+        font-weight: bold;
+      }
+      .slider-button-card .slider {
+        margin-top: 5px;  # Add space between the name and the slider
+      }
 
+```
+![Screenshot 2024-12-09 204941](https://github.com/user-attachments/assets/0bc28fe0-b53f-45d7-adaa-1e7e5adcefc7)
+
+3. Install button-card from this repo - https://github.com/custom-cards/button-card
+4. Create buttons by using this code:
+```
+type: horizontal-stack
+cards:
+  - type: custom:button-card
+    entity: switch.evse_reset_counter_a
+    color_type: card
+    color: rgb(34, 139, 34)
+    icon: mdi:reload
+    name: Reset
+    show_state: false
+    tap_action:
+      action: more-info
+      haptic: medium
+    hold_action:
+      action: toggle
+    size: 15%
+    styles:
+      card:
+        - border-radius: 10px
+        - box-shadow: 0 2px 4px rgba(0,0,0,0.1)
+    state:
+      - value: "on"
+        styles:
+          icon:
+            - color: white
+      - value: "off"
+        styles:
+          icon:
+            - color: ba
+  - type: custom:button-card
+    entity: switch.evse_one_charge
+    color_type: card
+    color: rgb(34, 139, 34)
+    icon: mdi:power-plug
+    name: Charge
+    show_state: false
+    tap_action:
+      action: more-info
+      haptic: medium
+    hold_action:
+      action: toggle
+    size: 15%
+    styles:
+      card:
+        - border-radius: 10px
+        - box-shadow: 0 2px 4px rgba(0,0,0,0.1)
+    state:
+      - value: "on"
+        styles:
+          icon:
+            - color: white
+      - value: "off"
+        styles:
+          icon:
+            - color: white
+  - type: custom:button-card
+    entity: switch.evse_stop_charging
+    color_type: card
+    color: rgb(230, 40, 40)
+    icon: mdi:stop-circle-outline
+    name: Stop
+    show_state: false
+    tap_action:
+      action: more-info
+      haptic: medium
+    hold_action:
+      action: toggle
+    size: 15%
+    styles:
+      card:
+        - border-radius: 10px
+        - box-shadow: 0 2px 4px rgba(0,0,0,0.1)
+    state:
+      - value: "on"
+        styles:
+          icon:
+            - color: white
+      - value: "off"
+        styles:
+          icon:
+            - color: white
+```
+![Screenshot 2024-12-09 204558](https://github.com/user-attachments/assets/1c5b8597-cc29-4a47-9496-10c965dcfe14)
+![Screenshot 2024-12-09 204536](https://github.com/user-attachments/assets/1d75a1b2-c7ff-4944-bf38-dc5937430619)
 # SOC CALCULATION
 For proper SOC calculation it`s important to:
 1. Set your EV Battery capacity (one time action)
-2. Reset Counter A before every car charge
-3. Set current SOC level before every car charge
-4. Set the right corretion level (energy loses in % - 7.5 by default)
+2. Set the right corretion level (energy loses in % - 7.5 by default)
+3. Before each charge:
+   3.1. Reset Counter A before every car charge
+   3.2. Reset Counter A before every car charge
+   3.3. Optional - change target SOC (80% by default)

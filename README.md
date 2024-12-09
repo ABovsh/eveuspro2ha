@@ -1,5 +1,4 @@
 # Eveus Pro integration with Home Assistant
-
 # Disclaimer
 The code within this repository comes with no guarantee, the use of this code is your responsibility.
 
@@ -583,7 +582,7 @@ cards:
       }
 
 ```
-![Screenshot 2024-12-09 204941](https://github.com/user-attachments/assets/0bc28fe0-b53f-45d7-adaa-1e7e5adcefc7)
+![Screenshot 2024-12-09 205257](https://github.com/user-attachments/assets/2cab6384-b60c-4bec-bf51-7e5641d251e4)
 
 3. Install button-card from this repo - https://github.com/custom-cards/button-card
 4. Create buttons by using this code:

@@ -448,7 +448,12 @@ command_line:
         curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=oneCharge&oneCharge=0"
       command_state: >
         curl -s -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r ".oneCharge"
-      value_template: '{{ value == 1 }}'
+      value_template: >
+        {% if value == '1' %}
+          true
+        {% else %}
+          false
+        {% endif %}
 ```
 # 6. Validate configuration in Home Assistant
 Configuration -> Server Controls

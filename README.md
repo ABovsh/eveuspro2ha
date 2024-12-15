@@ -5,17 +5,46 @@ The code within this repository comes with no guarantee, the use of this code is
 I take NO responsibility and/or liability for how you choose to use information available here. By using any of the files available in this repository, you understand that you are AGREEING TO USE AT YOUR OWN RISK.
 
 # Changelog comparing with original version
-1. Added descriptions for sensors: Enhanced the clarity of sensor labels.
-2. Corrected status mapping logic: Fixed the logic for mapping the statuses.
-3. Added sub-status mapping logic: Introduced additional mapping for sub-statuses.
-4. Fixed current management: Resolved issues with managing current settings.
-5. Fixed "Stop charging" logic: Corrected the logic for stopping the charging process.
-6. Added SOC sensors: Included sensors for monitoring State of Charge (SOC).
-7. Added "Time to Target" sensor: Introduced a sensor to calculate time to target SOC.
-8. Added Counter A and Counter B sensors: Integrated sensors to monitor both charging counters.
-9. Parametrized charger user, password and car battery capacity: Simplified configuration by parameterizing sensitive values. NOTE: EVEUS IP ADDRESS still needs to be specified mannualy across the code. 
-10. Added switch to reset Counter A: Introduced a switch for resetting Counter A
-11. Other minor fixes and improvements
+1. Added descriptions for sensors: Enhanced the clarity of sensor labels and added proper device classes.
+2. Corrected status mapping logic: Fixed and expanded status interpretation with improved error handling.
+3. Added sub-status mapping logic: Comprehensive mapping for both error and operational sub-states.
+4. Fixed current management: Improved current control with error handling and validation.
+5. Fixed "Stop charging" logic: Enhanced charging control with proper error states and confirmations.
+6. Added SOC sensors: 
+   - Added kWh and percentage SOC tracking
+   - Added loss factor correction
+   - Added max capacity limits
+   - Added proper validation and bounds
+7. Added "Time to Target" sensor: 
+   - Calculates remaining time with loss consideration
+   - Added multiple status messages
+   - Added insufficient power detection
+8. Added Counter A and B sensors: 
+   - Integrated energy monitoring
+   - Added cost tracking in local currency
+   - Added proper error handling
+9. Parametrized configuration:
+   - Added secrets for credentials
+   - Added configurable battery capacity
+   - Added loss factor adjustment
+   NOTE: EVEUS IP ADDRESS still needs to be specified manually
+10. Added Counter A management:
+    - Added reset switch with confirmation
+    - Added timeout handling
+    - Added proper error states
+11. UI Improvements:
+    - Added theme-aware styling
+    - Added mobile-friendly button sizes
+    - Added proper haptic feedback
+    - Added status-based color coding
+12. Error Handling:
+    - Added comprehensive error detection
+    - Added connection timeouts
+    - Added value validation
+    - Added proper status messages
+
+KNOWN LIMITATIONS:
+- Some parameters like Eveus IP Address require direct YAML editing
 
 # Configuration steps
 # 1. Add secrets to /config/secrets.yaml file
@@ -284,80 +313,99 @@ eveus_password: "your charger password"
       value_template: "{{ state_attr('sensor.evse_eveus', 'IEM2_money') | round(2) }}"
       unit_of_measurement: "₴"
 
-    # Sensor for EV SOC in kWh using Counter A and initial SOC
+    # Sensor for EV State of Charge in kWh
     ev_soc_kwh:
-      friendly_name: "EV State of Charge (kWh)"
-      value_template: >
-        {% set initial_soc = states('input_number.initial_ev_soc') | float %}
-        {% set max_capacity = states('input_number.ev_battery_capacity') | float(80) %}
-        {% set energy_charged = states('sensor.evse_eveus_counter_a_energy') | float %}
-        {% set correction_factor = states('input_number.ev_soc_correction') | float / 100 %}
-        {% if initial_soc >= 0 and energy_charged >= 0 %}
-          {{ ((initial_soc / 100 * max_capacity) + energy_charged * (1 - correction_factor)) | round(2) }}
-        {% else %}
-          unknown
-        {% endif %}
+      friendly_name: "EV State of Charge"
+      unique_id: ev_soc_kwh
+      device_class: energy
       unit_of_measurement: "kWh"
-
-    # Sensor for EV SOC in percentage using Counter A and initial SOC
-    ev_soc_percent:
-      friendly_name: "EV State of Charge (%)"
       value_template: >
-        {% set initial_soc = states('input_number.initial_ev_soc') | float %}
-        {% set max_capacity = states('input_number.ev_battery_capacity') | float(80) %}
-        {% set energy_charged = states('sensor.evse_eveus_counter_a_energy') | float %}
-        {% set correction_factor = states('input_number.ev_soc_correction') | float / 100 %}
-        {% if initial_soc >= 0 and energy_charged >= 0 %}
-          {% set total_soc = (initial_soc / 100 * max_capacity + energy_charged * (1 - correction_factor)) %}
-          {{ ((total_soc / max_capacity) * 100) | round(2) }}
-        {% else %}
-          unknown
-        {% endif %}
-      unit_of_measurement: "%"
-
-    # Sensor for Time to Target SOC considering losses
-    evse_time_to_target_soc:
-      friendly_name: "Time to Target SOC"
-      value_template: >-
-        {% set total_capacity = states('input_number.ev_battery_capacity') | float(80) %}
-        {% set current_soc = states('sensor.ev_soc_percent') | float(0) %}
-        {% set initial_soc = states('input_number.initial_ev_soc') | float(0) %}
+        {% set initial_soc = states('input_number.initial_ev_soc') | float(-1) %}
+        {% set max_capacity = states('input_number.ev_battery_capacity') | float(0) %}
         {% set energy_charged = states('sensor.evse_eveus_counter_a_energy') | float(0) %}
         {% set correction_factor = states('input_number.ev_soc_correction') | float(0) / 100 %}
-        {% set charging_power = states('sensor.evse_eveus_powermeas') | float(0) %}
-        {% set target_soc = states('input_number.target_soc') | float(80) %}
-
-        {% set target_capacity = total_capacity * target_soc / 100 %}
-        {% set current_capacity = total_capacity * current_soc / 100 %}
-
-        {% set remaining_capacity_kwh = target_capacity - current_capacity %}
-
-        {% if current_soc >= target_soc %}
-          SOC is already at or above target
+        
+        {# Enhanced validation with more specific error handling #}
+        {% if not is_number(initial_soc) or not is_number(max_capacity) or not is_number(energy_charged) %}
+          unknown
+        {% elif initial_soc < 0 or initial_soc > 100 %}
+          unknown
+        {% elif max_capacity <= 0 %}
+          unknown
         {% else %}
-          {% if remaining_capacity_kwh <= 0 %}
-            SOC is already above target
+          {% set initial_kwh = (initial_soc / 100) * max_capacity %}
+          {% set charged_kwh = energy_charged * (1 - correction_factor) %}
+          {% set total_kwh = initial_kwh + charged_kwh %}
+          {# Prevent showing less than 0 or more than max capacity #}
+          {{ [0, [total_kwh, max_capacity] | min] | max | round(2) }}
+        {% endif %}
+
+    # Sensor for EV State of Charge as percentage
+    ev_soc_percent:
+      friendly_name: "EV State of Charge"
+      unique_id: ev_soc_percent
+      device_class: battery
+      unit_of_measurement: "%"
+      value_template: >
+        {% set current_kwh = states('sensor.ev_soc_kwh') | float(-1) %}
+        {% set max_capacity = states('input_number.ev_battery_capacity') | float(0) %}
+        
+        {# Enhanced validation #}
+        {% if not is_number(current_kwh) or not is_number(max_capacity) %}
+          unknown
+        {% elif current_kwh < 0 or max_capacity <= 0 %}
+          unknown
+        {% else %}
+          {# Ensure percentage stays between 0 and 100 #}
+          {{ [0, [((current_kwh / max_capacity) * 100) | round(0), 100] | min] | max }}
+        {% endif %}
+
+    # Sensor for Time to Target SOC
+    evse_time_to_target_soc:
+      friendly_name: "Time to Target SOC"
+      unique_id: evse_time_to_target_soc
+      value_template: >
+        {% set current_soc = states('sensor.ev_soc_percent') | float(-1) %}
+        {% set target_soc = states('input_number.target_soc') | float(0) %}
+        {% set charging_power = states('sensor.evse_eveus_powermeas') | float(0) %}
+        {% set correction_factor = states('input_number.ev_soc_correction') | float(0) / 100 %}
+        {% set max_capacity = states('input_number.ev_battery_capacity') | float(0) %}
+        {% set is_charging = is_state('sensor.evse_eveus_state', 'Charging') %}
+        
+        {# Enhanced input validation #}
+        {% if not is_number(current_soc) or not is_number(target_soc) or not is_number(max_capacity) %}
+          unknown
+        {% elif current_soc < 0 or current_soc > 100 %}
+          unknown
+        {% elif target_soc <= 0 or target_soc > 100 %}
+          unknown
+        {% elif max_capacity <= 0 %}
+          unknown
+        {% elif current_soc >= target_soc %}
+          Target reached
+        {% elif not is_charging %}
+          Not charging
+        {% elif charging_power < 100 %}
+          Insufficient power
+        {% else %}
+          {% set remaining_kwh = (target_soc - current_soc) / 100 * max_capacity %}
+          {% set effective_power_kw = charging_power * (1 - correction_factor) / 1000 %}
+          {% set total_minutes = (remaining_kwh / effective_power_kw * 60) | round(0) %}
+          
+          {# Format output #}
+          {% set days = (total_minutes // 1440) | int %}
+          {% set hours = ((total_minutes % 1440) // 60) | int %}
+          {% set minutes = (total_minutes % 60) | int %}
+          
+          {% if total_minutes < 1 %}
+            Less than 1m
+          {% elif total_minutes < 60 %}
+            {{ minutes }}m
           {% else %}
-            {% set effective_power = charging_power * (1 - correction_factor) / 1000 %}
-            
-            {% if charging_power == 0 %}
-              Charging power is unavailable
-            {% elif effective_power > 0 %}
-              {% set time_seconds = (remaining_capacity_kwh * 3600) / effective_power %}
-              {% set days = time_seconds // 86400 %}
-              {% set hours = (time_seconds % 86400) // 3600 %}
-              {% set minutes = (time_seconds % 3600) // 60 %}
-              
-              {% if time_seconds < 3600 %}
-                {{ '%dm' % minutes }}
-              {% else %}
-                {{ '%dd ' % days if days else '' }}{{ '%dh ' % hours if hours else '' }}{{ '%dm' % minutes if minutes else '' }}
-              {% endif %}
-            {% else %}
-              unknown
-            {% endif %}
+            {{ days ~ 'd ' if days > 0 }}{{ hours ~ 'h ' if hours > 0 }}{{ minutes ~ 'm' if minutes > 0 }}
           {% endif %}
         {% endif %}
+
 ```
 # 3. Add current regulator into /config/configuration.yaml
 ```
@@ -418,41 +466,84 @@ input_number:
 ```
 command_line:
   - switch:
-      name: Eveus reset counter A
-      unique_id: evse_reset_counter_a
+      name: "Eveus Reset Counter A"
+      unique_id: evse_eveus_reset_counter_a
+      icon: mdi:counter
       command_on: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=rstEM1&rstEM1=0"
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
+        -H "Content-type: application/x-www-form-urlencoded" 
+        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
+        -d "pageevent=rstEM1&rstEM1=0" 
+        || echo "ERROR"
       command_off: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=rstEM1&rstEM1=0"
-      command_state: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r ".IEM1"
-      value_template: '{{ value | int == 0 }}'  # Checks if the value of IEM1 is 0 (reset state)
-
-  - switch:
-      name: Eveus stop charging
-      unique_id: evse_stop_charging
-      command_on: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=evseEnabled&evseEnabled=1"
-      command_off: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=evseEnabled&evseEnabled=0"
-      command_state: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r ".evseEnabled"
-      value_template: '{{ value == "1" }}'  # Checks if the value of evseEnabled is 1 (charging stopped)
-
-  - switch:
-      name: Eveus OneCharge
-      unique_id: evse_one_charge
-      command_on: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=oneCharge&oneCharge=1"
-      command_off: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=oneCharge&oneCharge=0"
-      command_state: >
-        curl -s -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r ".oneCharge"
-      value_template: >
-        {% if value == '1' %}
-          true
-        {% else %}
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
+        -H "Content-type: application/x-www-form-urlencoded" 
+        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
+        -d "pageevent=rstEM1&rstEM1=0" 
+        || echo "ERROR"
+      command_state: >-
+        (curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
+        "http://<EVEUS_IP_ADDRESS>/main" 
+        | jq -r "if .IEM1 != null then .IEM1 else \"ERROR\" end") 2>/dev/null || echo "ERROR"
+      value_template: >-
+        {% if value in ['ERROR', 'null', '', 'undefined'] %}
           false
+        {% else %}
+          {{ value | int != 0 }}
+        {% endif %}
+
+  - switch:
+      name: "Charging Control"
+      unique_id: evse_eveus_stop_charging
+      icon: mdi:ev-station
+      command_on: >
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
+        -H "Content-type: application/x-www-form-urlencoded" 
+        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
+        -d "pageevent=evseEnabled&evseEnabled=1" 
+        || echo "ERROR"
+      command_off: >
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
+        -H "Content-type: application/x-www-form-urlencoded" 
+        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
+        -d "pageevent=evseEnabled&evseEnabled=0" 
+        || echo "ERROR"
+      command_state: >-
+        (curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
+        "http://<EVEUS_IP_ADDRESS>/main" 
+        | jq -r "if .evseEnabled != null then .evseEnabled else \"ERROR\" end") 2>/dev/null || echo "ERROR"
+      value_template: >-
+        {% if value in ['ERROR', 'null', '', 'undefined'] %}
+          false
+        {% else %}
+          {{ value == '1' }}
+        {% endif %}
+
+  - switch:
+      name: "One Charge"
+      unique_id: evse_eveus_one_charge
+      icon: mdi:lightning-bolt
+      command_on: >
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
+        -H "Content-type: application/x-www-form-urlencoded" 
+        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
+        -d "pageevent=oneCharge&oneCharge=1" 
+        || echo "ERROR"
+      command_off: >
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
+        -H "Content-type: application/x-www-form-urlencoded" 
+        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
+        -d "pageevent=oneCharge&oneCharge=0" 
+        || echo "ERROR"
+      command_state: >-
+        (curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
+        "http://<EVEUS_IP_ADDRESS>/main" 
+        | jq -r "if .oneCharge != null then .oneCharge else \"ERROR\" end") 2>/dev/null || echo "ERROR"
+      value_template: >-
+        {% if value in ['ERROR', 'null', '', 'undefined'] %}
+          false
+        {% else %}
+          {{ value == '1' }}
         {% endif %}
 ```
 # 6. Validate configuration in Home Assistant

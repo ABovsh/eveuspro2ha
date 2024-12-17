@@ -829,6 +829,58 @@ cards:
 ![Screenshot 2024-12-10 001923](https://github.com/user-attachments/assets/e13c5f36-251b-4590-92bb-1059396461d0)
 2. Disabled:
 ![Screenshot 2024-12-10 002041](https://github.com/user-attachments/assets/8dfec758-743c-4781-9e6a-c6a1eeb2db75)
+# Advanced notifications
+Create an automation by using the code below. Just change the notification service name. 
+```
+alias: EV Charging Complete Notification
+description: Notify when EV charging session is complete
+
+triggers:
+  - entity_id: sensor.evse_eveus_state
+    from: Charging
+    trigger: state
+
+conditions:
+  - condition: and
+    conditions:
+      - condition: template
+        value_template: |
+          {{ 
+            trigger.from_state.state == 'Charging' and 
+            trigger.from_state.state not in ['unavailable', 'unknown'] and
+            trigger.to_state.state not in ['unavailable', 'unknown']
+          }}
+      - condition: template
+        value_template: |
+          {{ states('sensor.evse_eveus_counter_a_energy')|float(0) > 0 }}
+
+actions:
+  - data:
+      title: 🔋 EV Charging Session Complete
+      message: >-
+        {% set session_time = states('sensor.evse_eveus_newsessiontime') %}
+        {% set session_energy = states('sensor.evse_eveus_counter_a_energy')|float(0) %}
+        {% set session_cost = states('sensor.evse_eveus_counter_a_cost')|float(0) %}
+        {% set initial_soc = states('input_number.initial_ev_soc')|float %}
+        {% set final_soc = states('sensor.ev_soc_percent')|float %}
+        {% set battery_capacity = states('input_number.ev_battery_capacity')|float %}
+        {% set battery_added = (final_soc - initial_soc) * battery_capacity / 100 %}
+        {% set efficiency = (battery_added / session_energy * 100) if session_energy > 0 else 0 %}
+
+        Session Details:
+        • Duration: {{ session_time }}
+        • Grid Energy: {{ session_energy|round(2) }} kWh
+        • Battery Added: {{ battery_added|round(1) }} kWh ({{ efficiency|round(1) }}% eff.)
+        • SOC: {{ initial_soc|round(1) }}% → {{ final_soc|round(1) }}%
+        • Cost: {{ session_cost|round(2) }}₴
+
+    action: notify.<NAME OF THE SERVICE>
+
+mode: single
+max_exceeded: silent
+```
+
+
 # SOC CALCULATION
 For proper SOC calculation it`s important to:
 1. Set your EV Battery capacity (one time action)

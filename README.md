@@ -1,58 +1,114 @@
 # Eveus Pro integration with Home Assistant
-# Disclaimer
+
+## Table of Contents
+1. [Disclaimer](#disclaimer)
+2. [Features & Improvements](#features--improvements)
+3. [Quick Start Guide](#quick-start-guide)
+4. [Configuration Steps](#configuration-steps)
+   - [Add credentials](#1-add-credentials)
+   - [Add sensors](#2-add-sensors)
+   - [Add current regulator](#3-add-current-regulator)
+   - [Add input numbers](#4-add-input-numbers)
+   - [Add switches](#5-add-switches)
+   - [Validate and restart](#6-validate-and-restart)
+5. [UI Setup](#ui-setup)
+   - [Basic Entity Card](#basic-entity-card)
+   - [Advanced UI Elements](#advanced-ui-elements)
+     - [Slider Controls](#slider-controls)
+     - [Action Buttons](#action-buttons)
+6. [Notifications](#notifications)
+   - [Session Start Notification](#session-start-notification)
+   - [Session Complete Notification](#session-complete-notification)
+7. [SOC Calculation Guide](#soc-calculation-guide)
+
+## Disclaimer
 The code within this repository comes with no guarantee, the use of this code is your responsibility.
 
 I take NO responsibility and/or liability for how you choose to use information available here. By using any of the files available in this repository, you understand that you are AGREEING TO USE AT YOUR OWN RISK.
 
-# Changelog comparing with original version
-1. Added descriptions for sensors: Enhanced the clarity of sensor labels and added proper device classes.
-2. Corrected status mapping logic: Fixed and expanded status interpretation with improved error handling.
-3. Added sub-status mapping logic: Comprehensive mapping for both error and operational sub-states.
-4. Fixed current management: Improved current control with error handling and validation.
-5. Fixed "Stop charging" logic: Enhanced charging control with proper error states and confirmations.
-6. Added SOC sensors: 
-   - Added kWh and percentage SOC tracking
-   - Added loss factor correction
-   - Added max capacity limits
-   - Added proper validation and bounds
-7. Added "Time to Target" sensor: 
-   - Calculates remaining time with loss consideration
-   - Added multiple status messages
-   - Added insufficient power detection
-8. Added Counter A and B sensors: 
-   - Integrated energy monitoring
-   - Added cost tracking in local currency
-   - Added proper error handling
-9. Parametrized configuration:
-   - Added secrets for credentials
-   - Added configurable battery capacity
-   - Added loss factor adjustment
-   NOTE: EVEUS IP ADDRESS still needs to be specified manually
-10. Added Counter A management:
-    - Added reset switch with confirmation
-    - Added timeout handling
-    - Added proper error states
-11. UI Improvements:
-    - Added theme-aware styling
-    - Added mobile-friendly button sizes
-    - Added proper haptic feedback
-    - Added status-based color coding
-12. Error Handling:
-    - Added comprehensive error detection
-    - Added connection timeouts
-    - Added value validation
-    - Added proper status messages
+## Features & Improvements
+1. **Enhanced Sensor Functionality**
+   - Added descriptions and proper device classes
+   - Expanded status interpretation with error handling
+   - Added sub-status mapping for both error and operational states
 
-KNOWN LIMITATIONS:
-- Some parameters like Eveus IP Address require direct YAML editing
+2. **Improved Charging Controls**
+   - Enhanced current control with validation
+   - Fixed "Stop charging" logic with error states
+   - Added proper confirmations and status feedback
 
-# Configuration steps
-# 1. Add secrets to /config/secrets.yaml file
-```
+3. **Advanced SOC Tracking**
+   - Added kWh and percentage SOC monitoring
+   - Integrated loss factor correction
+   - Added capacity limits and validation
+
+4. **Smart Charging Features**
+   - Added "Time to Target" calculation
+   - Multiple status messages
+   - Insufficient power detection
+
+5. **Energy Monitoring**
+   - Counter A and B integration
+   - Cost tracking in local currency
+   - Comprehensive error handling
+
+6. **Flexible Configuration**
+   - Secrets for credentials
+   - Configurable battery capacity
+   - Adjustable loss factor
+   - Note: EVEUS IP ADDRESS requires manual YAML editing
+
+7. **Counter Management**
+   - Reset functionality with confirmation
+   - Timeout handling
+   - Status monitoring
+
+8. **UI Enhancements**
+   - Theme-aware styling
+   - Mobile-friendly controls
+   - Haptic feedback support
+   - Status-based color coding
+
+9. **Robust Error Handling**
+   - Comprehensive error detection
+   - Connection timeouts
+   - Value validation
+   - Detailed status messages
+
+**Known Limitations:**
+- Eveus IP Address configuration requires direct YAML editing
+## Quick Start Guide
+1. **Prepare Your Environment**
+   - Ensure your Home Assistant is up and running
+   - Make sure you have access to configuration files
+   - Know your Eveus charger's IP address
+
+2. **Basic Setup (5 minutes)**
+   - Add credentials to secrets.yaml
+   - Copy sensor configurations to configuration.yaml
+   - Add controllers and inputs
+   - Restart Home Assistant
+
+3. **UI Configuration (5 minutes)**
+   - Add basic entity card
+   - Configure sliders and buttons
+   - Set up notifications
+
+4. **Final Configuration (5 minutes)**
+   - Set your EV battery capacity
+   - Configure correction factor
+   - Test the setup
+
+## Configuration Steps
+
+### 1. Add credentials
+Add the following to your `/config/secrets.yaml` file:
+```yaml
 eveus_username: "your charger username"
 eveus_password: "your charger password"
 ```
-# 2. Add sensors to the /config/configuration.yaml file
+### 2. Add sensors
+Add these sensors to your /config/configuration.yaml file:
 ```
 # Additional sensors for EVSE
 - platform: rest
@@ -407,7 +463,8 @@ eveus_password: "your charger password"
         {% endif %}
 
 ```
-# 3. Add current regulator into /config/configuration.yaml
+### 3. Add current regulator
+Add to your /config/configuration.yaml:
 ```
 shell_command:
   evse_current_incr: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://<EVEUS_IP_ADDRESS>/pageEvent' -d \"currentSet=$(($(curl -s -u !secret eveus_username:!secret eveus_password -X POST 'http://<EVEUS_IP_ADDRESS>/main' | jq '.currentSet')+1))\""
@@ -415,7 +472,8 @@ shell_command:
   evse_current_set: "curl -s -u !secret eveus_username:!secret eveus_password -X POST -H 'Content-type: application/x-www-form-urlencoded' 'http://<EVEUS_IP_ADDRESS>/pageEvent' -d \"currentSet={{ '%02d'|format(states('input_number.evse_eveus_current')|int) }}\""
 
 ```
-# 4. Add input numbers into /config/configuration.yaml
+### 4. Add input numbers
+Add to your /config/configuration.yaml:
 ```
 input_number:
   ev_battery_capacity:
@@ -462,7 +520,8 @@ input_number:
     mode: slider
     icon: mdi:current-dc
 ```
-# 5. Add switches into /config/configuration.yaml
+### 5. Add switches
+Add to your /config/configuration.yaml:
 ```
 command_line:
   - switch:
@@ -546,15 +605,14 @@ command_line:
           {{ value == '1' }}
         {% endif %}
 ```
-# 6. Validate configuration in Home Assistant
-Configuration -> Server Controls
-Press `CHECK CONFIGURATION` button in `Check Configuration` section
+### 6. Validate and restart
+Go to Configuration -> Server Controls
+Click CHECK CONFIGURATION button
+If successful, click RESTART in Server Management section
 
-# 7. Restart HA server
-Configuration -> Server Controls
-Press `RESTART` in `Server managementn` section
-
-# 8. Create an entity card in your Home Assistant dashboard
+## UI Setup
+### Basic Entity Card
+Create an entity card in your Home Assistant dashboard with this configuration:
 ```
 type: entities
 entities:
@@ -610,7 +668,8 @@ entities:
 show_header_toggle: false
 ```
 ![Screenshot 2024-12-09 204029](https://github.com/user-attachments/assets/87db7d47-08ab-4098-b877-e57b3bdc6c25)
-# 9. Create modern control elements
+### Advanced UI Elements
+#### Slider Controls
 1. Install slider button card from this repo - https://github.com/mattieha/slider-button-card
 2. Create sliders by using this code:
 ```
@@ -679,9 +738,9 @@ cards:
 
 ```
 ![Screenshot 2024-12-09 205257](https://github.com/user-attachments/assets/2cab6384-b60c-4bec-bf51-7e5641d251e4)
-
-3. Install button-card from this repo - https://github.com/custom-cards/button-card
-4. Create buttons by using this code:
+#### Action Buttons
+1. Install button-card from this repo - https://github.com/custom-cards/button-card
+2. Create buttons by using this code:
 ```
 type: horizontal-stack
 cards:
@@ -829,30 +888,98 @@ cards:
 ![Screenshot 2024-12-10 001923](https://github.com/user-attachments/assets/e13c5f36-251b-4590-92bb-1059396461d0)
 2. Disabled:
 ![Screenshot 2024-12-10 002041](https://github.com/user-attachments/assets/8dfec758-743c-4781-9e6a-c6a1eeb2db75)
-# Advanced notifications
-Create an automation by using the code below. Just change the notification service name. 
+## Notifications
+### Session Start Notification
+Create an automation in Home Assistant by using the code below. Replace <NOTIFICATION_SERVICE_NAME> with your notification service name
 ```
-alias: EV Charging Complete Notification
-description: Notify when EV charging session is complete with comprehensive error handling
-
-trigger:
-  - platform: state
-    entity_id: sensor.evse_eveus_state
-    from: Charging
-
-condition:
+alias: EV Charging - Session Started Notification
+description: Notify when EV charging session starts with comprehensive error handling
+mode: single
+triggers:
+  - entity_id: sensor.evse_eveus_state
+    to: Charging
+    trigger: state
+conditions:
   - condition: template
-    value_template: >
+    value_template: |
+      {% set entities = [
+        'sensor.evse_eveus_counter_a_energy',
+        'input_number.ev_battery_capacity',
+        'sensor.ev_soc_percent',
+        'input_number.initial_ev_soc'
+      ] %}
+      {% set all_available = true %}
+      {% for entity in entities %}
+        {% if states(entity) in ['unavailable', 'unknown', ''] %}
+          {% set all_available = false %}
+        {% endif %}
+      {% endfor %}
       {{ 
+        all_available and
+        states('sensor.evse_eveus_counter_a_energy')|float(0) >= 0 and
+        states('input_number.ev_battery_capacity')|float(0) > 0
+      }}
+actions:
+  - data:
+      title: 🔌 EV Charging Session Started 🚗⚡
+      message: >
+        {% set initial_soc = states('sensor.ev_soc_percent')|float(0) %}
+        {% set battery_capacity = states('input_number.ev_battery_capacity')|float(0) %}
+        {% set target_soc = states('input_number.initial_ev_soc')|float(0) %}
+        {% set energy_needed = (target_soc - initial_soc) * battery_capacity / 100 %}
+        
+        📊 Starting Conditions:
+        * 🔋 Current Battery SoC: {{ initial_soc|round(1) }}%
+        * 🎯 Target SoC: {{ target_soc|round(1) }}%
+        * ⚡ Estimated Energy Needed: {{ energy_needed|round(1) }} kWh
+        * ⏰ Current Time: {{ now().strftime("%H:%M") }}
+        
+        {% if initial_soc >= target_soc %}
+        ⚠️ Warning: Current SoC ({{ initial_soc|round(1) }}%) is already at or above target ({{ target_soc|round(1) }}%)
+        {% endif %}
+        
+        {% if initial_soc < 20 %}
+        ℹ️ Starting with low battery level. Charging may be slower initially.
+        {% endif %}
+    action: notify.<NOTIFICATION_SERVICE_NAME>
+max_exceeded: silent
+```
+### Session Complete Notification
+Create an automation in Home Assistant by using the code below. Replace <NOTIFICATION_SERVICE_NAME> with your notification service name
+```
+alias: EV Charging - Session Completed Notification
+description: Notify when EV charging session is complete with comprehensive error handling
+mode: single
+triggers:
+  - entity_id: sensor.evse_eveus_state
+    from: Charging
+    trigger: state
+conditions:
+  - condition: template
+    value_template: |
+      {% set entities = [
+        'sensor.evse_eveus_counter_a_energy',
+        'input_number.ev_battery_capacity',
+        'sensor.ev_soc_percent',
+        'input_number.initial_ev_soc',
+        'sensor.evse_eveus_newsessiontime',
+        'sensor.evse_eveus_counter_a_cost'
+      ] %}
+      {% set all_available = true %}
+      {% for entity in entities %}
+        {% if states(entity) in ['unavailable', 'unknown', ''] %}
+          {% set all_available = false %}
+        {% endif %}
+      {% endfor %}
+      {{ 
+        all_available and
         trigger.from_state.state == 'Charging' and 
         states('sensor.evse_eveus_counter_a_energy')|float(0) > 0 and
         states('input_number.ev_battery_capacity')|float(0) > 0
       }}
-
-action:
-  - service: <SERVICENAME TO SEND MESSAGES>
-    data:
-      title: "🔋 EV Charging Session Complete 🚗⚡"
+actions:
+  - data:
+      title: 🔋 EV Charging Session Complete 🚗⚡
       message: >
         {% set session_time = states('sensor.evse_eveus_newsessiontime') %}
         {% set session_energy = states('sensor.evse_eveus_counter_a_energy')|float(0) %}
@@ -860,24 +987,22 @@ action:
         {% set initial_soc = states('input_number.initial_ev_soc')|float(0) %}
         {% set final_soc = states('sensor.ev_soc_percent')|float(0) %}
         {% set battery_capacity = states('input_number.ev_battery_capacity')|float(0) %}
-        
         {% set battery_added = (final_soc - initial_soc) * battery_capacity / 100 %}
         {% set efficiency = (battery_added / session_energy * 100) if session_energy > 0 else 0 %}
-        
-        {% set session_time = session_time if session_time not in ['unknown', ''] else 'N/A' %}
-        
         {% set soc_increase = (final_soc - initial_soc)|round(1) %}
         {% set soc_increase_display = '+' + soc_increase|string if soc_increase > 0 else soc_increase|string %}
-
+        
         📊 Session Overview:
         * 🕒 Duration: {{ session_time }}
         * ⚡ Total Energy: {{ session_energy|round(2) }} kWh
         * 🔋 Battery Capacity Added: {{ battery_added|round(1) }} kWh
         * 📊 Charging Efficiency: {{ efficiency|round(1) }}%
+
         🔬 Battery State:
         * 🔋 Initial SoC: {{ initial_soc|round(1) }}%
         * 🔌 Final SoC: {{ final_soc|round(1) }}%
         * ⬆️ SoC Increase: {{ soc_increase_display }}%
+
         💰 Session Economics:
         * 💸 Charging Cost: {{ session_cost|round(2) }}₴
 
@@ -885,16 +1010,38 @@ action:
         ⚠️ Low charging efficiency detected. Check charging conditions.
         {% endif %}
 
-mode: single
+        {% if final_soc < initial_soc %}
+        ⚠️ Warning: Final SoC is lower than initial SoC. Possible measurement error.
+        {% endif %}
+    action: notify.<NOTIFICATION_SERVICE_NAME>
 max_exceeded: silent
 ```
 
+## SOC Calculation Guide
 
-# SOC CALCULATION
-For proper SOC calculation it`s important to:
-1. Set your EV Battery capacity (one time action)
-2. Set the right corretion level (energy loses in % - 7.5 by default)
-3. Before each charge:
-   3.1. Reset Counter A before every car charge
-   3.2. Reset Counter A before every car charge
-   3.3. Optional - change target SOC (80% by default)
+### Initial Setup
+1. **Set Battery Capacity** (one-time configuration)
+    * Navigate to your dashboard
+    * Find "Battery Capacity (kWh)" slider
+    * Set your EV's actual battery capacity
+
+2. **Configure Correction Factor**
+    * Default value: 7.5%
+    * Adjust based on your charging efficiency
+    * Higher values account for more charging losses
+
+### Before Each Charging Session
+1. **Reset Counter A**
+    * Press the "Reset" button
+    * Confirm the reset action
+    * Verify counter shows 0 kWh
+
+2. **Set Initial SOC**
+    * Use the "Init SOC" slider
+    * Set to your car's current battery percentage
+    * Ensure accurate starting point
+
+3. **Optional: Adjust Target SOC**
+    * Default is 80% (recommended for battery longevity)
+    * Can be adjusted between 80-100%
+    * Higher values may affect battery health

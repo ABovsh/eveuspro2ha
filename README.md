@@ -951,12 +951,30 @@ alias: EV Charging - Current Changed Notification
 description: Notify when charging current changes during active charging
 mode: single
 triggers:
-  - entity_id: input_number.evse_eveus_current
-    platform: state
+  - platform: state
+    entity_id: sensor.evse_eveus_currentset
 conditions:
-  - condition: state
-    entity_id: sensor.evse_eveus_state
-    state: Charging
+  - condition: template
+    value_template: >
+      {% set entities = [
+        'sensor.ev_soc_percent',
+        'input_number.target_soc',
+        'sensor.evse_time_to_target_soc',
+        'sensor.evse_eveus_currentset',
+        'sensor.evse_eveus'
+      ] %}
+      {% set all_available = true %}
+      {% for entity in entities %}
+        {% if states(entity) in ['unavailable', 'unknown', ''] %}
+          {% set all_available = false %}
+        {% endif %}
+      {% endfor %}
+      {% set state_num = state_attr('sensor.evse_eveus', 'state')|int(0) %}
+      {{ 
+        all_available and
+        trigger.from_state.state != trigger.to_state.state and
+        state_num == 4  # 4 is Charging state
+      }}
 actions:
   - delay: "00:01:00"
   - data:
@@ -966,13 +984,18 @@ actions:
         {% set target_soc = states('input_number.target_soc')|float(0) %}
         {% set soc_delta = target_soc - current_soc %}
         {% set time_to_target = states('sensor.evse_time_to_target_soc') %}
-        {% set hours = time_to_target.split('h')[0]|int(0) if 'h' in time_to_target else 0 %}
-        {% set minutes = time_to_target.split('h')[1].split('m')[0]|int(0) if 'h' in time_to_target else time_to_target.split('m')[0]|int(0) %}
-        {% set completion_time = now() + timedelta(hours=hours, minutes=minutes) %}
+        {% if time_to_target not in ['unknown', '', 'unavailable', 'Not charging', 'Target reached'] %}
+          {% set hours = time_to_target.split('h')[0]|int(0) if 'h' in time_to_target else 0 %}
+          {% set minutes = time_to_target.split('h')[1].split('m')[0]|int(0) if 'h' in time_to_target else time_to_target.split('m')[0]|int(0) %}
+          {% set completion_time = now() + timedelta(hours=hours, minutes=minutes) %}
+          {% set eta_message = completion_time.strftime('%H:%M %d.%m.%Y') + ' (in ' + time_to_target + ')' %}
+        {% else %}
+          {% set eta_message = time_to_target %}
+        {% endif %}
         
-        🔌 Current: {{ states('input_number.evse_eveus_current')|float(0)|round(0) }}A
+        🔌 Current: {{ states('sensor.evse_eveus_currentset')|float(0)|round(0) }}A
         🔋 SoC: {{ current_soc|round(0) }}% → {{ target_soc|round(0) }}% (+{{ soc_delta|round(0) }}%)
-        ⏰ ETA: {{ completion_time.strftime('%H:%M %d.%m.%Y') }} (in {{ time_to_target }})
+        ⏰ ETA: {{ eta_message }}
     action: notify.<NOTIFICATION_SERVICE_NAME>
 max_exceeded: silent
 ```

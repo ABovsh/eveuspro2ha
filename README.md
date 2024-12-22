@@ -994,28 +994,15 @@ actions:
         {% set final_soc = states('sensor.ev_soc_percent')|float(0) %}
         {% set battery_capacity = states('input_number.ev_battery_capacity')|float(0) %}
         {% set battery_added = (final_soc - initial_soc) * battery_capacity / 100 %}
-        {% set efficiency = (battery_added / session_energy * 100) if session_energy > 0 else 0 %}
         {% set soc_increase = (final_soc - initial_soc)|round(1) %}
         {% set soc_increase_display = '+' + soc_increase|string if soc_increase > 0 else soc_increase|string %}
         
         📊 Session Overview:
-        * 🕒 Duration: {{ session_time }}
-        * ⚡ Total Energy: {{ session_energy|round(2) }} kWh
-        * 🔋 Battery Capacity Added: {{ battery_added|round(1) }} kWh
-        * 📊 Charging Efficiency: {{ efficiency|round(1) }}%
-
-        🔬 Battery State:
-        * 🔋 Initial SoC: {{ initial_soc|round(1) }}%
-        * 🔌 Final SoC: {{ final_soc|round(1) }}%
-        * ⬆️ SoC Increase: {{ soc_increase_display }}%
-
-        💰 Session Economics:
-        * 💸 Charging Cost: {{ session_cost|round(2) }}₴
-
-        {% if efficiency < 70 %}
-        ⚠️ Low charging efficiency detected. Check charging conditions.
-        {% endif %}
-
+        🕒 Duration: {{ session_time }}
+        🔋 SoC: {{ initial_soc|round(1) }}% → {{ final_soc|round(1) }}% ({{ soc_increase_display }}%)
+        ⚡ Energy: {{ battery_added|round(1) }}kWh → {{ session_energy|round(2) }}kWh
+        💸 Session Cost: {{ session_cost|round(2) }}₴
+        
         {% if final_soc < initial_soc %}
         ⚠️ Warning: Final SoC is lower than initial SoC. Possible measurement error.
         {% endif %}

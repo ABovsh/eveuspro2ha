@@ -18,6 +18,7 @@
      - [Action Buttons](#action-buttons)
 6. [Notifications](#notifications)
    - [Session Start Notification](#session-start-notification)
+   - [Current Change Notification](#current-change-notification)
    - [Session Complete Notification](#session-complete-notification)
 7. [SOC Calculation Guide](#soc-calculation-guide)
 
@@ -890,7 +891,6 @@ cards:
 ![Screenshot 2024-12-10 002041](https://github.com/user-attachments/assets/8dfec758-743c-4781-9e6a-c6a1eeb2db75)
 ## Notifications
 ### Session Start Notification
-Create an automation in Home Assistant by using the code below. Replace <NOTIFICATION_SERVICE_NAME> with your notification service name
 ```
 alias: EV Charging - Session Started Notification
 description: Notify when EV charging session starts with comprehensive error handling
@@ -906,7 +906,8 @@ conditions:
         'sensor.evse_eveus_counter_a_energy',
         'input_number.ev_battery_capacity',
         'sensor.ev_soc_percent',
-        'input_number.initial_ev_soc'
+        'input_number.target_soc',
+        'sensor.evse_eveus_curmeas1'
       ] %}
       {% set all_available = true %}
       {% for entity in entities %}
@@ -919,25 +920,59 @@ conditions:
         states('sensor.evse_eveus_counter_a_energy')|float(0) >= 0 and
         states('input_number.ev_battery_capacity')|float(0) > 0
       }}
+actions:
+  - delay: "00:01:00"
+  - data:
+      title: "*EV Charging* 🪫 *Session Started*"
+      message: >
+        {% set current_soc = states('sensor.ev_soc_percent')|float(0) %}
+        {% set battery_capacity = states('input_number.ev_battery_capacity')|float(0) %}
+        {% set target_soc = states('input_number.target_soc')|float(0) %}
+        {% set energy_needed = (target_soc - current_soc) * battery_capacity / 100 %}
+        {% set time_to_target = states('sensor.evse_time_to_target_soc') %}
+        {% set soc_delta = target_soc - current_soc %}
+        {% set soc_delta_display = '+' + soc_delta|string if soc_delta > 0 else soc_delta|string %}
+        {% set target_energy = states('sensor.evse_eveus_counter_a_energy')|float(0) + energy_needed %}
+        {% set charging_current = states('sensor.evse_eveus_curmeas1')|float(0) %}
+        {% set hours = time_to_target.split('h')[0]|int(0) if 'h' in time_to_target else 0 %}
+        {% set minutes = time_to_target.split('h')[1].split('m')[0]|int(0) if 'h' in time_to_target else time_to_target.split('m')[0]|int(0) %}
+        {% set completion_time = now() + timedelta(hours=hours, minutes=minutes) %}
+        
+        🔋 SoC: {{ current_soc|round(0) }}% → {{ target_soc|round(0) }}% (+{{ soc_delta|round(0) }}%)
+        ⚡ Energy: {{ states('sensor.evse_eveus_counter_a_energy')|float(0)|round(0) }}kWh → {{ target_energy|round(0) }}kWh (+{{ energy_needed|round(0) }}kWh)
+        🔌 Current: {{ charging_current|round(0) }}A
+        ⏰ ETA: {{ completion_time.strftime('%H:%M %d.%m.%Y') }} (in {{ time_to_target }})
+    action: notify.<NOTIFICATION_SERVICE_NAME>
+max_exceeded: silent
+```
+### Current Change Notification
+```
+alias: EV Charging - Current Changed Notification
+description: Notify when charging current changes during active charging
+mode: single
+triggers:
+  - entity_id: input_number.evse_eveus_current
+    platform: state
+conditions:
   - condition: state
     entity_id: sensor.evse_eveus_state
-    state: 'Charging'
-    for: 
-      minutes: 1
+    state: Charging
 actions:
+  - delay: "00:01:00"
   - data:
-      title: 🔌 EV Charging Session Started 🚗⚡
+      title: "*EV Charging* 🔌 *Current Changed*"
       message: >
-        {% set initial_soc = states('sensor.ev_soc_percent')|float(0) %}
-        {% set battery_capacity = states('input_number.ev_battery_capacity')|float(0) %}
-        {% set target_soc = states('input_number.initial_ev_soc')|float(0) %}
-        {% set energy_needed = (target_soc - initial_soc) * battery_capacity / 100 %}
+        {% set current_soc = states('sensor.ev_soc_percent')|float(0) %}
+        {% set target_soc = states('input_number.target_soc')|float(0) %}
+        {% set soc_delta = target_soc - current_soc %}
         {% set time_to_target = states('sensor.evse_time_to_target_soc') %}
+        {% set hours = time_to_target.split('h')[0]|int(0) if 'h' in time_to_target else 0 %}
+        {% set minutes = time_to_target.split('h')[1].split('m')[0]|int(0) if 'h' in time_to_target else time_to_target.split('m')[0]|int(0) %}
+        {% set completion_time = now() + timedelta(hours=hours, minutes=minutes) %}
         
-        🔋 Current Battery SoC: {{ initial_soc|round(1) }}%
-        🎯 Target SoC: {{ target_soc|round(1) }}%
-        ⚡ Estimated Energy Needed: {{ energy_needed|round(1) }} kWh
-        ⏰ Time to Target: {{ time_to_target }}
+        🔌 Current: {{ states('input_number.evse_eveus_current')|float(0)|round(0) }}A
+        🔋 SoC: {{ current_soc|round(0) }}% → {{ target_soc|round(0) }}% (+{{ soc_delta|round(0) }}%)
+        ⏰ ETA: {{ completion_time.strftime('%H:%M %d.%m.%Y') }} (in {{ time_to_target }})
     action: notify.<NOTIFICATION_SERVICE_NAME>
 max_exceeded: silent
 ```
@@ -976,7 +1011,7 @@ conditions:
       }}
 actions:
   - data:
-      title: 🔋 EV Charging Session Complete 🚗⚡
+      title: "*EV Charging* 🔋 *Session Completed*"
       message: >
         {% set session_time = states('sensor.evse_eveus_newsessiontime') %}
         {% set session_energy = states('sensor.evse_eveus_counter_a_energy')|float(0) %}
@@ -985,13 +1020,13 @@ actions:
         {% set final_soc = states('sensor.ev_soc_percent')|float(0) %}
         {% set battery_capacity = states('input_number.ev_battery_capacity')|float(0) %}
         {% set battery_added = (final_soc - initial_soc) * battery_capacity / 100 %}
-        {% set soc_increase = (final_soc - initial_soc)|round(1) %}
-        {% set soc_increase_display = '+' + soc_increase|string if soc_increase > 0 else soc_increase|string %}
+        {% set soc_increase = final_soc - initial_soc %}
+        {% set energy_delta = session_energy - battery_added %}
         
         🕒 Duration: {{ session_time }}
-        🔋 SoC: {{ initial_soc|round(1) }}% → {{ final_soc|round(1) }}% ({{ soc_increase_display }}%)
-        ⚡ Energy: {{ battery_added|round(1) }}kWh → {{ session_energy|round(2) }}kWh
-        💸 Session Cost: {{ session_cost|round(2) }}₴
+        🔋 SoC: {{ initial_soc|round(0) }}% → {{ final_soc|round(0) }}% (+{{ soc_increase|round(0) }}%)
+        ⚡ Energy: {{ battery_added|round(0) }}kWh → {{ session_energy|round(0) }}kWh (+{{ energy_delta|round(0) }}kWh)
+        💸 Session Cost: {{ session_cost|round(0) }}₴
         
         {% if final_soc < initial_soc %}
         ⚠️ Warning: Final SoC is lower than initial SoC. Possible measurement error.

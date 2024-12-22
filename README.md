@@ -919,6 +919,11 @@ conditions:
         states('sensor.evse_eveus_counter_a_energy')|float(0) >= 0 and
         states('input_number.ev_battery_capacity')|float(0) > 0
       }}
+  - condition: state
+    entity_id: sensor.evse_eveus_state
+    state: 'Charging'
+    for: 
+      minutes: 1
 actions:
   - data:
       title: 🔌 EV Charging Session Started 🚗⚡
@@ -927,12 +932,13 @@ actions:
         {% set battery_capacity = states('input_number.ev_battery_capacity')|float(0) %}
         {% set target_soc = states('input_number.initial_ev_soc')|float(0) %}
         {% set energy_needed = (target_soc - initial_soc) * battery_capacity / 100 %}
+        {% set time_to_target = states('sensor.evse_time_to_target_soc') %}
         
         📊 Starting Conditions:
-        * 🔋 Current Battery SoC: {{ initial_soc|round(1) }}%
-        * 🎯 Target SoC: {{ target_soc|round(1) }}%
-        * ⚡ Estimated Energy Needed: {{ energy_needed|round(1) }} kWh
-        * ⏰ Current Time: {{ now().strftime("%H:%M") }}
+        🔋 Current Battery SoC: {{ initial_soc|round(1) }}%
+        🎯 Target SoC: {{ target_soc|round(1) }}%
+        ⚡ Estimated Energy Needed: {{ energy_needed|round(1) }} kWh
+        ⏰ Time to Target: {{ time_to_target }}
         
         {% if initial_soc >= target_soc %}
         ⚠️ Warning: Current SoC ({{ initial_soc|round(1) }}%) is already at or above target ({{ target_soc|round(1) }}%)

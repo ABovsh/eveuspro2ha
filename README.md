@@ -894,55 +894,62 @@ cards:
 ```
 alias: EV Charging - Session Started Notification
 description: Notify when EV charging session starts with comprehensive error handling
-mode: single
 triggers:
-  - entity_id: sensor.evse_eveus_state
-    to: Charging
-    trigger: state
+ - platform: state
+   entity_id: sensor.evse_eveus_state
+   to: Charging
 conditions:
-  - condition: template
-    value_template: |
-      {% set entities = [
-        'sensor.evse_eveus_counter_a_energy',
-        'input_number.ev_battery_capacity',
-        'sensor.ev_soc_percent',
-        'input_number.target_soc',
-        'sensor.evse_eveus_curmeas1'
-      ] %}
-      {% set all_available = true %}
-      {% for entity in entities %}
-        {% if states(entity) in ['unavailable', 'unknown', ''] %}
-          {% set all_available = false %}
-        {% endif %}
-      {% endfor %}
-      {{ 
-        all_available and
-        states('sensor.evse_eveus_counter_a_energy')|float(0) >= 0 and
-        states('input_number.ev_battery_capacity')|float(0) > 0
-      }}
+ - condition: template
+   value_template: >
+     {% set entities = [
+       'sensor.evse_eveus',
+       'sensor.ev_soc_percent',
+       'input_number.target_soc',
+       'sensor.evse_time_to_target_soc',
+       'sensor.evse_eveus_currentset',
+       'sensor.evse_eveus_counter_a_energy'
+     ] %}
+     {% set all_available = true %}
+     {% for entity in entities %}
+       {% if states(entity) in ['unavailable', 'unknown', ''] %}
+         {% set all_available = false %}
+       {% endif %}
+     {% endfor %}
+     {% set state_num = state_attr('sensor.evse_eveus', 'state')|int(0) %}
+     {{ 
+       all_available and
+       state_num == 4 and
+       states('sensor.evse_eveus_counter_a_energy')|float(0) >= 0
+     }}
 actions:
-  - delay: "00:01:00"
-  - data:
-      title: "*EV Charging* 🪫 *Session Started*"
-      message: >
-        {% set current_soc = states('sensor.ev_soc_percent')|float(0) %}
-        {% set battery_capacity = states('input_number.ev_battery_capacity')|float(0) %}
-        {% set target_soc = states('input_number.target_soc')|float(0) %}
-        {% set energy_needed = (target_soc - current_soc) * battery_capacity / 100 %}
-        {% set time_to_target = states('sensor.evse_time_to_target_soc') %}
-        {% set soc_delta = target_soc - current_soc %}
-        {% set soc_delta_display = '+' + soc_delta|string if soc_delta > 0 else soc_delta|string %}
-        {% set target_energy = states('sensor.evse_eveus_counter_a_energy')|float(0) + energy_needed %}
-        {% set charging_current = states('sensor.evse_eveus_curmeas1')|float(0) %}
-        {% set hours = time_to_target.split('h')[0]|int(0) if 'h' in time_to_target else 0 %}
-        {% set minutes = time_to_target.split('h')[1].split('m')[0]|int(0) if 'h' in time_to_target else time_to_target.split('m')[0]|int(0) %}
-        {% set completion_time = now() + timedelta(hours=hours, minutes=minutes) %}
-        
-        🔋 SoC: {{ current_soc|round(0) }}% → {{ target_soc|round(0) }}% (+{{ soc_delta|round(0) }}%)
-        ⚡ Energy: {{ states('sensor.evse_eveus_counter_a_energy')|float(0)|round(0) }}kWh → {{ target_energy|round(0) }}kWh (+{{ energy_needed|round(0) }}kWh)
-        🔌 Current: {{ charging_current|round(0) }}A
-        ⏰ ETA: {{ completion_time.strftime('%H:%M %d.%m.%Y') }} (in {{ time_to_target }})
-    action: notify.<NOTIFICATION_SERVICE_NAME>
+ - delay:
+     minutes: 1
+ - service: notify.<NOTIFICATION_SERVICE_NAME>
+   data:
+     title: "*EV Charging* 🪫 *Session Started*"
+     message: |
+       {% set current_soc = states('sensor.ev_soc_percent')|float(0) %}
+       {% set battery_capacity = states('input_number.ev_battery_capacity')|float(0) %}
+       {% set target_soc = states('input_number.target_soc')|float(0) %}
+       {% set energy_needed = (target_soc - current_soc) * battery_capacity / 100 %}
+       {% set time_to_target = states('sensor.evse_time_to_target_soc') %}
+       {% set soc_delta = target_soc - current_soc %}
+       {% set target_energy = states('sensor.evse_eveus_counter_a_energy')|float(0) + energy_needed %}
+       {% set charging_current = states('sensor.evse_eveus_currentset')|float(0) %}
+       {% set eta_message = time_to_target %}
+       
+       {% if time_to_target not in ['unknown', '', 'unavailable', 'Not charging', 'Target reached'] %}
+         {% set hours = time_to_target.split('h')[0]|int(0) if 'h' in time_to_target else 0 %}
+         {% set minutes = time_to_target.split('h')[1].split('m')[0]|int(0) if 'h' in time_to_target else time_to_target.split('m')[0]|int(0) %}
+         {% set completion_time = now() + timedelta(hours=hours, minutes=minutes) %}
+         {% set eta_message = completion_time.strftime('%H:%M %d.%m.%Y') + ' (in ' + time_to_target + ')' %}
+       {% endif %}
+       
+       🔋 SoC: {{ current_soc|round(0) }}% → {{ target_soc|round(0) }}% (+{{ soc_delta|round(0) }}%)
+       ⚡ Energy: {{ states('sensor.evse_eveus_counter_a_energy')|float(0)|round(0) }}kWh → {{ target_energy|round(0) }}kWh (+{{ energy_needed|round(0) }}kWh)
+       🔌 Current: {{ charging_current|round(0) }}A
+       ⏰ ETA: {{ eta_message }}
+mode: single
 max_exceeded: silent
 ```
 ### Current Change Notification
@@ -1013,20 +1020,19 @@ Create an automation in Home Assistant by using the code below. Replace <NOTIFIC
 ```
 alias: EV Charging - Session Completed Notification
 description: Notify when EV charging session is complete with comprehensive error handling
-mode: single
 triggers:
-  - entity_id: sensor.evse_eveus_state
+  - platform: state
+    entity_id: sensor.evse_eveus_state
     from: Charging
-    trigger: state
 conditions:
   - condition: template
-    value_template: |
+    value_template: >
       {% set entities = [
-        'sensor.evse_eveus_counter_a_energy',
-        'input_number.ev_battery_capacity',
+        'sensor.evse_eveus',
         'sensor.ev_soc_percent',
         'input_number.initial_ev_soc',
         'sensor.evse_eveus_newsessiontime',
+        'sensor.evse_eveus_counter_a_energy',
         'sensor.evse_eveus_counter_a_cost'
       ] %}
       {% set all_available = true %}
@@ -1035,16 +1041,18 @@ conditions:
           {% set all_available = false %}
         {% endif %}
       {% endfor %}
+      {% set state_num = state_attr('sensor.evse_eveus', 'state')|int(0) %}
       {{ 
         all_available and
-        trigger.from_state.state == 'Charging' and 
-        states('sensor.evse_eveus_counter_a_energy')|float(0) > 0 and
-        states('input_number.ev_battery_capacity')|float(0) > 0
+        state_num != 4 and
+        trigger.from_state.state == 'Charging' and
+        states('sensor.evse_eveus_counter_a_energy')|float(0) > 0 
       }}
 actions:
-  - data:
+  - service: notify.<NOTIFICATION_SERVICE_NAME>
+    data:
       title: "*EV Charging* 🔋 *Session Completed*"
-      message: >
+      message: |
         {% set session_time = states('sensor.evse_eveus_newsessiontime') %}
         {% set session_energy = states('sensor.evse_eveus_counter_a_energy')|float(0) %}
         {% set session_cost = states('sensor.evse_eveus_counter_a_cost')|float(0) %}
@@ -1059,11 +1067,10 @@ actions:
         🔋 SoC: {{ initial_soc|round(0) }}% → {{ final_soc|round(0) }}% (+{{ soc_increase|round(0) }}%)
         ⚡ Energy: {{ battery_added|round(0) }}kWh → {{ session_energy|round(0) }}kWh (+{{ energy_delta|round(0) }}kWh)
         💸 Session Cost: {{ session_cost|round(0) }}₴
-        
         {% if final_soc < initial_soc %}
         ⚠️ Warning: Final SoC is lower than initial SoC. Possible measurement error.
         {% endif %}
-    action: notify.<NOTIFICATION_SERVICE_NAME>
+mode: single
 max_exceeded: silent
 ```
 

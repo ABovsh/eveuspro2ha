@@ -894,7 +894,9 @@ cards:
 Create an automation in Home Assistant by using the code below. Replace <NOTIFICATION_SERVICE_NAME> with your notification service name
 ```
 alias: EV Charging - Session Started Notification
-description: Notify when EV charging session starts with comprehensive error handling
+description: >-
+  Sends notification when EV charging session starts with SoC, energy and timing
+  details
 triggers:
   - entity_id: sensor.evse_eveus_state
     to: Charging
@@ -902,22 +904,12 @@ triggers:
 conditions:
   - condition: template
     value_template: >
-      {% set entities = [
-        'sensor.evse_eveus',
-        'sensor.ev_soc_percent',
-        'input_number.target_soc',
-        'sensor.evse_time_to_target_soc',
-        'sensor.evse_eveus_currentset',
-        'sensor.evse_eveus_counter_a_energy'
-      ] %} {% set all_available = true %} {% for entity in entities %}
-        {% if states(entity) in ['unavailable', 'unknown', ''] %}
-          {% set all_available = false %}
-        {% endif %}
-      {% endfor %} {% set state_num = state_attr('sensor.evse_eveus',
-      'state')|int(0) %} {{ 
-        all_available and
-        state_num == 4 and
-        states('sensor.evse_eveus_counter_a_energy')|float(0) >= 0
+      {% set valid_states = ['unknown', 'Invalid capacity', 'unavailable'] %}
+      {{ 
+        current_soc not in valid_states and
+        current_kwh not in ['unknown', 'unavailable'] and
+        time_to_target not in ['Invalid target', 'Invalid capacity'] and
+        evse_state == 4
       }}
 actions:
   - delay:
@@ -925,38 +917,107 @@ actions:
   - data:
       title: "*EV Charging* 🪫 *Session Started*"
       message: >
-        {% set current_soc = states('sensor.ev_soc_percent')|float(0) %} {% set
-        battery_capacity = states('input_number.ev_battery_capacity')|float(0)
-        %} {% set target_soc = states('input_number.target_soc')|float(0) %} {%
-        set energy_needed = (target_soc - current_soc) * battery_capacity / 100
-        %} {% set time_to_target = states('sensor.evse_time_to_target_soc') %}
-        {% set soc_delta = target_soc - current_soc %} {% set target_energy =
-        states('sensor.evse_eveus_counter_a_energy')|float(0) + energy_needed %}
-        {% set charging_current =
-        states('sensor.evse_eveus_currentset')|float(0) %} {% set eta_message =
-        time_to_target %} {% if time_to_target not in ['unknown', '',
-        'unavailable', 'Not charging', 'Target reached'] %}
+        {% set energy_needed = (target_soc - current_soc) * battery_capacity /
+        100 %}
+
+        {% set target_energy = current_kwh + energy_needed %}
+
+        {% set soc_delta = target_soc - current_soc %}
+
+
+        {% set eta_message = time_to_target %}
+
+        {% if time_to_target not in ['unknown', '', 'unavailable', 'Not
+        charging', 'Target reached', 'Invalid target', 'Invalid capacity',
+        'Insufficient power'] %}
           {% set hours = time_to_target.split('h')[0]|int(0) if 'h' in time_to_target else 0 %}
           {% set minutes = time_to_target.split('h')[1].split('m')[0]|int(0) if 'h' in time_to_target else time_to_target.split('m')[0]|int(0) %}
           {% set completion_time = now() + timedelta(hours=hours, minutes=minutes) %}
           {% set eta_message = completion_time.strftime('%H:%M %d.%m.%Y') + ' (in ' + time_to_target + ')' %}
         {% endif %}
 
+
         🔋 SoC: {{ current_soc|round(0) }}% → {{ target_soc|round(0) }}% (+{{
         soc_delta|round(0) }}%)
 
-        ⚡ Energy: {{
-        states('sensor.evse_eveus_counter_a_energy')|float(0)|round(0) }}kWh →
-        {{ target_energy|round(0) }}kWh (+{{ energy_needed|round(0) }}kWh)
+        ⚡ Energy: {{ current_kwh|round(1) }}kWh → {{ target_energy|round(1)
+        }}kWh (+{{ energy_needed|round(1) }}kWh)
 
-        🔌 Current: {{ charging_current|round(0) }}A
+        🔌 Current: {{ current|round(0) }}A
 
         ⏰ ETA: {{ eta_message }}
-    action: notify.harold
+    action: notify.<NOTIFICATION_SERVICE_NAME>
+variables:
+  evse_state: "{{ state_attr('sensor.evse_eveus', 'state')|int(0) }}"
+  current_soc: "{{ states('sensor.ev_soc_percent')|float(0) }}"
+  current_kwh: "{{ states('sensor.ev_soc_kwh')|float(0) }}"
+  target_soc: "{{ states('input_number.target_soc')|float(0) }}"
+  battery_capacity: "{{ states('input_number.ev_battery_capacity')|float(0) }}"
+  current: "{{ states('sensor.evse_eveus_currentset')|float(0) }}"
+  time_to_target: "{{ states('sensor.evse_time_to_target_soc') }}"
+mode: single
+max_exceeded: silent
+```
+### Session Complete Notification
+Create an automation in Home Assistant by using the code below. Replace <NOTIFICATION_SERVICE_NAME> with your notification service name
+```
+alias: EV Charging - Session Completed Notification
+description: Sends notification when EV charging session completes with session stats
+triggers:
+  - entity_id: sensor.evse_eveus_state
+    from: Charging
+    trigger: state
+conditions:
+  - condition: template
+    value_template: >
+      {% set valid_states = ['unknown', 'Invalid capacity', 'unavailable'] %}
+      {{ 
+        current_soc not in valid_states and
+        soc_kwh not in ['unknown', 'unavailable'] and
+        evse_state != 4 and
+        trigger.from_state.state == 'Charging' and
+        session_energy > 0
+      }}
+actions:
+  - data:
+      title: "*EV Charging* 🔋 *Session Completed*"
+      message: >
+        {% set initial_energy = soc_kwh - session_energy %}
+
+        {% set soc_increase = current_soc - initial_soc %}
+
+        {% set efficiency = (session_energy / session_energy * 100)|round(1) if
+        session_energy > 0 else 0 %}
+
+        {% set corrected_efficiency = efficiency * (1 - correction / 100) %}
+
+
+        🕒 Duration: {{ session_time }}
+
+        🔋 SoC: {{ initial_soc|round(0) }}% → {{ current_soc|round(0) }}% (+{{
+        soc_increase|round(0) }}%)
+
+        ⚡ Energy: {{ initial_energy|round(1) }}kWh → {{ soc_kwh|round(1) }}kWh
+        (+{{ session_energy|round(1) }}kWh)
+
+        📊 Efficiency: {{ corrected_efficiency|round(1) }}%
+
+        💸 Cost: {{ session_cost|round(0) }}₴
+    action: notify.<NOTIFICATION_SERVICE_NAME>
+variables:
+  evse_state: "{{ state_attr('sensor.evse_eveus', 'state')|int(0) }}"
+  session_energy: "{{ states('sensor.evse_eveus_counter_a_energy')|float(0) }}"
+  session_time: "{{ states('sensor.evse_eveus_newsessiontime') }}"
+  session_cost: "{{ states('sensor.evse_eveus_counter_a_cost')|float(0) }}"
+  current_soc: "{{ states('sensor.ev_soc_percent')|float(0) }}"
+  soc_kwh: "{{ states('sensor.ev_soc_kwh')|float(0) }}"
+  initial_soc: "{{ states('input_number.initial_ev_soc')|float(0) }}"
+  correction: "{{ states('input_number.ev_soc_correction')|float(0) }}"
 mode: single
 max_exceeded: silent
 ```
 ### Current Change Notification
+Create an automation in Home Assistant by using the code below. Replace <NOTIFICATION_SERVICE_NAME> with your notification service name
 ```
 alias: EV Charging - Current Changed Notification
 description: Notify when charging current changes during active charging
@@ -966,21 +1027,13 @@ triggers:
 conditions:
   - condition: template
     value_template: >
-      {% set entities = [
-        'sensor.evse_eveus',
-        'sensor.ev_soc_percent',
-        'input_number.target_soc',
-        'sensor.evse_time_to_target_soc',
-        'sensor.evse_eveus_currentset'
-      ] %} {% set all_available = true %} {% for entity in entities %}
-        {% if states(entity) in ['unavailable', 'unknown', ''] %}
-          {% set all_available = false %}
-        {% endif %}
-      {% endfor %} {% set state_num = state_attr('sensor.evse_eveus',
-      'state')|int(0) %} {{ 
-        all_available and
-        trigger.from_state.state != trigger.to_state.state and
-        state_num == 4
+      {% set valid_states = ['unknown', 'Invalid capacity', 'unavailable'] %}
+      {{ 
+        current_soc not in valid_states and
+        evse_state == 4 and
+        trigger.from_state.state|float(0) != trigger.to_state.state|float(0) and
+        (current >= 6 and current <= 32) and
+        time_to_target not in ['Invalid target', 'Invalid capacity']
       }}
 actions:
   - delay:
@@ -988,103 +1041,33 @@ actions:
   - data:
       title: "*EV Charging* 🔌 *Current Changed*"
       message: >
-        {% set current_soc = states('sensor.ev_soc_percent')|float(0) %} {% set
-        target_soc = states('input_number.target_soc')|float(0) %} {% set
-        soc_delta = target_soc - current_soc %} {% set time_to_target =
-        states('sensor.evse_time_to_target_soc') %} {% set eta_message =
-        time_to_target %} {% if time_to_target not in ['unknown', '',
-        'unavailable', 'Not charging', 'Target reached'] %}
+        {% set soc_delta = target_soc - current_soc %}
+
+        {% set eta_message = time_to_target %}
+
+        {% if time_to_target not in ['unknown', '', 'unavailable', 'Not
+        charging', 'Target reached', 'Invalid target', 'Invalid capacity',
+        'Insufficient power'] %}
           {% set hours = time_to_target.split('h')[0]|int(0) if 'h' in time_to_target else 0 %}
           {% set minutes = time_to_target.split('h')[1].split('m')[0]|int(0) if 'h' in time_to_target else time_to_target.split('m')[0]|int(0) %}
           {% set completion_time = now() + timedelta(hours=hours, minutes=minutes) %}
           {% set eta_message = completion_time.strftime('%H:%M %d.%m.%Y') + ' (in ' + time_to_target + ')' %}
         {% endif %}
 
-        🔌 Current: {{ states('sensor.evse_eveus_currentset')|float(0)|round(0)
-        }}A
+
+        🔌 Current: {{ current|round(0) }}A
 
         🔋 SoC: {{ current_soc|round(0) }}% → {{ target_soc|round(0) }}% (+{{
         soc_delta|round(0) }}%)
 
         ⏰ ETA: {{ eta_message }}
-    action: notify.harold
-mode: single
-max_exceeded: silent
-```
-### Session Complete Notification
-Create an automation in Home Assistant by using the code below. Replace <NOTIFICATION_SERVICE_NAME> with your notification service name
-```
-alias: EV Charging - Session Completed Notification
-description: Notify when EV charging session is complete with comprehensive error handling
-triggers:
-  - entity_id: sensor.evse_eveus_state
-    from: Charging
-    trigger: state
-conditions:
-  - condition: template
-    value_template: >
-      {% set entities = [
-        'sensor.evse_eveus',
-        'sensor.ev_soc_percent',
-        'input_number.initial_ev_soc',
-        'sensor.evse_eveus_newsessiontime',
-        'sensor.evse_eveus_counter_a_energy',
-        'sensor.evse_eveus_counter_a_cost'
-      ] %} {% set all_available = true %} {% for entity in entities %}
-        {% if states(entity) in ['unavailable', 'unknown', ''] %}
-          {% set all_available = false %}
-        {% endif %}
-      {% endfor %} {% set state_num = state_attr('sensor.evse_eveus',
-      'state')|int(0) %} {{ 
-        all_available and
-        state_num != 4 and
-        trigger.from_state.state == 'Charging' and
-        states('sensor.evse_eveus_counter_a_energy')|float(0) > 0 
-      }}
-actions:
-  - data:
-      title: "*EV Charging* 🔋 *Session Completed*"
-      message: >
-        {% set session_time = states('sensor.evse_eveus_newsessiontime') %}
-
-        {% set session_energy =
-        states('sensor.evse_eveus_counter_a_energy')|float(0) %}
-
-        {% set session_cost =
-        states('sensor.evse_eveus_counter_a_cost')|float(0) %}
-
-        {% set initial_soc = states('input_number.initial_ev_soc')|float(0) %}
-
-        {% set final_soc = states('sensor.ev_soc_percent')|float(0) %}
-
-        {% set battery_capacity =
-        states('input_number.ev_battery_capacity')|float(0) %}
-
-        {% set battery_added = (final_soc - initial_soc) * battery_capacity /
-        100 %}
-
-        {% set soc_increase = final_soc - initial_soc %}
-
-        {% set energy_delta = session_energy - battery_added %}
-
-
-        🕒 Duration: {{ session_time }}
-
-        🔋 SoC: {{ initial_soc|round(0) }}% → {{ final_soc|round(0) }}% (+{{
-        soc_increase|round(0) }}%)
-
-        ⚡ Energy: {{ battery_added|round(0) }}kWh → {{ session_energy|round(0)
-        }}kWh (+{{ energy_delta|round(0) }}kWh)
-
-        💸 Session Cost: {{ session_cost|round(0) }}₴
-
-        {% if final_soc < initial_soc %}
-
-        ⚠️ Warning: Final SoC is lower than initial SoC. Possible measurement
-        error.
-
-        {% endif %}
-    action: notify.harold
+    action: notify.<NOTIFICATION_SERVICE_NAME>
+variables:
+  evse_state: "{{ state_attr('sensor.evse_eveus', 'state')|int(0) }}"
+  current_soc: "{{ states('sensor.ev_soc_percent')|float(0) }}"
+  target_soc: "{{ states('input_number.target_soc')|float(0) }}"
+  current: "{{ states('sensor.evse_eveus_currentset')|float(0) }}"
+  time_to_target: "{{ states('sensor.evse_time_to_target_soc') }}"
 mode: single
 max_exceeded: silent
 ```

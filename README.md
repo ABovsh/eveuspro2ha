@@ -162,17 +162,27 @@ Add these sensors to your /config/configuration.yaml file:
 
 - platform: template
   sensors:
-    # Sensor for session duration formatted as time
+    # Session time sensor
+    evse_eveus_sessiontime:
+      friendly_name: "Session Time"
+      unique_id: evse_eveus_sessiontime
+      value_template: >
+        {{ state_attr('sensor.evse_eveus', 'sessionTime')|int(0) }}
+
+    # Session duration sensor with formatting
     evse_eveus_newsessiontime:
-      friendly_name: "eveus session duration"
+      friendly_name: "Session Duration"
+      unique_id: evse_eveus_newsessiontime
       value_template: >-
-        {% set uptime = states.sensor.evse_eveus_sessiontime.state | int %}
-        {% set years = uptime // 31536000 %}
-        {% set months = (uptime % 31536000) // 2592000 %}
-        {% set days = (uptime % 2592000) // 86400 %}
-        {% set hours = (uptime % 86400) // 3600 %}
-        {% set minutes = (uptime % 3600) // 60 %}
-        {{ '%dy ' % years if years else '' }}{{ '%dm ' % months if months else '' }}{{ '%dd ' % days if days else '' }}{{ '%dh ' % hours if hours else '' }}{{ '%dm' % minutes if minutes else '' }}
+        {% set uptime = state_attr('sensor.evse_eveus', 'sessionTime')|int(0) %}
+        {% if uptime > 0 %}
+          {% set days = uptime // 86400 %}
+          {% set hours = (uptime % 86400) // 3600 %}
+          {% set minutes = (uptime % 3600) // 60 %}
+          {{ '%dd ' % days if days > 0 }}{{ '%dh ' % hours if hours > 0 }}{{ '%dm' % minutes if minutes > 0 }}
+        {% else %}
+          No active session
+        {% endif %}
 
     # Sensor for EVSE enabled status
     evse_eveus_enabled:
@@ -377,89 +387,87 @@ Add these sensors to your /config/configuration.yaml file:
       device_class: energy
       unit_of_measurement: "kWh"
       value_template: >
-        {% set initial_soc = states('input_number.initial_ev_soc') | float(-1) %}
-        {% set max_capacity = states('input_number.ev_battery_capacity') | float(0) %}
-        {% set energy_charged = states('sensor.evse_eveus_counter_a_energy') | float(0) %}
-        {% set correction_factor = states('input_number.ev_soc_correction') | float(0) / 100 %}
+        {% set entities = {
+          'initial_soc': states('input_number.initial_ev_soc')|float(0),
+          'max_capacity': states('input_number.ev_battery_capacity')|float(0),
+          'energy_charged': states('sensor.evse_eveus_counter_a_energy')|float(0),
+          'correction': states('input_number.ev_soc_correction')|float(0)
+        } %}
         
-        {# Enhanced validation with more specific error handling #}
-        {% if not is_number(initial_soc) or not is_number(max_capacity) or not is_number(energy_charged) %}
-          unknown
-        {% elif initial_soc < 0 or initial_soc > 100 %}
-          unknown
-        {% elif max_capacity <= 0 %}
+        {% set is_valid = 
+          entities.initial_soc >= 0 and
+          entities.initial_soc <= 100 and
+          entities.max_capacity > 0 and
+          is_number(entities.energy_charged)
+        %}
+        
+        {% if not is_valid %}
           unknown
         {% else %}
-          {% set initial_kwh = (initial_soc / 100) * max_capacity %}
-          {% set charged_kwh = energy_charged * (1 - correction_factor) %}
+          {% set initial_kwh = (entities.initial_soc / 100) * entities.max_capacity %}
+          {% set efficiency = (1 - entities.correction / 100) %}
+          {% set charged_kwh = entities.energy_charged * efficiency %}
           {% set total_kwh = initial_kwh + charged_kwh %}
-          {# Prevent showing less than 0 or more than max capacity #}
-          {{ [0, [total_kwh, max_capacity] | min] | max | round(2) }}
+          {{ [0, [total_kwh, entities.max_capacity]|min]|max|round(2) }}
         {% endif %}
 
-    # Sensor for EV State of Charge as percentage
+    # Sensor for EV State of Charge as percentage 
     ev_soc_percent:
       friendly_name: "EV State of Charge"
       unique_id: ev_soc_percent
       device_class: battery
       unit_of_measurement: "%"
       value_template: >
-        {% set current_kwh = states('sensor.ev_soc_kwh') | float(-1) %}
-        {% set max_capacity = states('input_number.ev_battery_capacity') | float(0) %}
+        {% set data = {
+          'current_kwh': states('sensor.ev_soc_kwh')|float(-1),
+          'max_capacity': states('input_number.ev_battery_capacity')|float(0)
+        } %}
         
-        {# Enhanced validation #}
-        {% if not is_number(current_kwh) or not is_number(max_capacity) %}
-          unknown
-        {% elif current_kwh < 0 or max_capacity <= 0 %}
-          unknown
+        {% if data.current_kwh >= 0 and data.max_capacity > 0 %}
+          {% set percentage = (data.current_kwh / data.max_capacity * 100)|round(0) %}
+          {{ [0, [percentage, 100]|min]|max }}
         {% else %}
-          {# Ensure percentage stays between 0 and 100 #}
-          {{ [0, [((current_kwh / max_capacity) * 100) | round(0), 100] | min] | max }}
+          unknown
         {% endif %}
 
     # Sensor for Time to Target SOC
     evse_time_to_target_soc:
       friendly_name: "Time to Target SOC"
       unique_id: evse_time_to_target_soc
-      value_template: >
-        {% set current_soc = states('sensor.ev_soc_percent') | float(-1) %}
-        {% set target_soc = states('input_number.target_soc') | float(0) %}
-        {% set charging_power = states('sensor.evse_eveus_powermeas') | float(0) %}
-        {% set correction_factor = states('input_number.ev_soc_correction') | float(0) / 100 %}
-        {% set max_capacity = states('input_number.ev_battery_capacity') | float(0) %}
-        {% set is_charging = is_state('sensor.evse_eveus_state', 'Charging') %}
+      value_template: |
+        {% set current_soc = states('sensor.ev_soc_percent')|float(-1) %}
+        {% set target_soc = states('input_number.target_soc')|float(0) %}
         
-        {# Enhanced input validation #}
-        {% if not is_number(current_soc) or not is_number(target_soc) or not is_number(max_capacity) %}
+        {% if not is_number(current_soc) or current_soc < 0 or current_soc > 100 %}
           unknown
-        {% elif current_soc < 0 or current_soc > 100 %}
-          unknown
-        {% elif target_soc <= 0 or target_soc > 100 %}
-          unknown
-        {% elif max_capacity <= 0 %}
-          unknown
+        {% elif not is_number(target_soc) or target_soc <= 0 or target_soc > 100 %}
+          Invalid target
+        {% elif states('input_number.ev_battery_capacity')|float(0) <= 0 %}
+          Invalid capacity
         {% elif current_soc >= target_soc %}
           Target reached
-        {% elif not is_charging %}
+        {% elif not is_state('sensor.evse_eveus_state', 'Charging') %}
           Not charging
-        {% elif charging_power < 100 %}
+        {% elif states('sensor.evse_eveus_powermeas')|float(0) < 100 %}
           Insufficient power
         {% else %}
-          {% set remaining_kwh = (target_soc - current_soc) / 100 * max_capacity %}
-          {% set effective_power_kw = charging_power * (1 - correction_factor) / 1000 %}
-          {% set total_minutes = (remaining_kwh / effective_power_kw * 60) | round(0) %}
+          {% set remaining_kwh = (target_soc - current_soc) * states('input_number.ev_battery_capacity')|float(0) / 100 %}
+          {% set power_kw = states('sensor.evse_eveus_powermeas')|float(0) * (1 - states('input_number.ev_soc_correction')|float(0) / 100) / 1000 %}
+          {% set mins = (remaining_kwh / power_kw * 60)|round(0) %}
           
-          {# Format output #}
-          {% set days = (total_minutes // 1440) | int %}
-          {% set hours = ((total_minutes % 1440) // 60) | int %}
-          {% set minutes = (total_minutes % 60) | int %}
-          
-          {% if total_minutes < 1 %}
+          {% if mins < 1 %}
             Less than 1m
-          {% elif total_minutes < 60 %}
-            {{ minutes }}m
+          {% elif mins < 60 %}
+            {{ mins }}m
           {% else %}
-            {{ days ~ 'd ' if days > 0 }}{{ hours ~ 'h ' if hours > 0 }}{{ minutes ~ 'm' if minutes > 0 }}
+            {% set d = (mins // 1440)|int %}
+            {% set h = ((mins % 1440) // 60)|int %}
+            {% set m = (mins % 60)|int %}
+            {{ 
+              (d > 0 and d ~ 'd ' or '') ~ 
+              (h > 0 and h ~ 'h ' or '') ~ 
+              (m > 0 and m ~ 'm' or '') 
+            }}
           {% endif %}
         {% endif %}
 
@@ -893,29 +901,26 @@ cards:
 ### Session Start Notification
 Create an automation in Home Assistant by using the code below. Replace <NOTIFICATION_SERVICE_NAME> with your notification service name
 ```
-alias: EV Charging - Session Started Notification
-description: >-
-  Sends notification when EV charging session starts with SoC, energy and timing
-  details
+alias: EV_Charging_Started
+description: |
+  # EV Charging Monitor - Session Started
+  1. Primary: Detects charging session initialization
+  2. Safety: Validates charging parameters and sensor states
+  3. Monitoring: Tracks initial charging metrics
+  4. Notification: Provides session start details
 triggers:
-  - entity_id: sensor.evse_eveus_state
-    to: Charging
+  - entity_id: sensor.evse_time_to_target_soc
+    from: Not charging
+    id: charging_start
     trigger: state
 conditions:
   - condition: template
     value_template: >
-      {% set valid_states = ['unknown', 'Invalid capacity', 'unavailable'] %}
-      {{ 
-        current_soc not in valid_states and
-        current_kwh not in ['unknown', 'unavailable'] and
-        time_to_target not in ['Invalid target', 'Invalid capacity'] and
-        evse_state == 4
-      }}
+      {% set invalid_states = ['unknown', 'Invalid capacity', 'unavailable',
+      'Invalid target'] %} {{ trigger.to_state.state not in invalid_states }}
 actions:
-  - delay:
-      minutes: 1
   - data:
-      title: "*EV Charging* 🪫 *Session Started*"
+      title: "*EV* 🪫 *Charging Started at {{ current_amps }}A*"
       message: >
         {% set energy_needed = (target_soc - current_soc) * battery_capacity /
         100 %}
@@ -924,8 +929,8 @@ actions:
 
         {% set soc_delta = target_soc - current_soc %}
 
-
         {% set eta_message = time_to_target %}
+
 
         {% if time_to_target not in ['unknown', '', 'unavailable', 'Not
         charging', 'Target reached', 'Invalid target', 'Invalid capacity',
@@ -943,133 +948,117 @@ actions:
         ⚡ Energy: {{ current_kwh|round(1) }}kWh → {{ target_energy|round(1)
         }}kWh (+{{ energy_needed|round(1) }}kWh)
 
-        🔌 Current: {{ current|round(0) }}A
-
         ⏰ ETA: {{ eta_message }}
     action: notify.<NOTIFICATION_SERVICE_NAME>
 variables:
-  evse_state: "{{ state_attr('sensor.evse_eveus', 'state')|int(0) }}"
-  current_soc: "{{ states('sensor.ev_soc_percent')|float(0) }}"
+  current_amps: "{{ states('sensor.evse_eveus_currentset')|float(0)|round(0) }}"
+  current_soc: "{{ states('sensor.ev_soc_percent')|float(0)|round(0) }}"
   current_kwh: "{{ states('sensor.ev_soc_kwh')|float(0) }}"
-  target_soc: "{{ states('input_number.target_soc')|float(0) }}"
+  target_soc: "{{ states('input_number.target_soc')|float(0)|round(0) }}"
   battery_capacity: "{{ states('input_number.ev_battery_capacity')|float(0) }}"
-  current: "{{ states('sensor.evse_eveus_currentset')|float(0) }}"
+  soc_increase: "{{ (target_soc - current_soc)|round(0) }}"
   time_to_target: "{{ states('sensor.evse_time_to_target_soc') }}"
 mode: single
-max_exceeded: silent
 ```
 ### Session Complete Notification
 Create an automation in Home Assistant by using the code below. Replace <NOTIFICATION_SERVICE_NAME> with your notification service name
 ```
-alias: EV Charging - Session Completed Notification
-description: Sends notification when EV charging session completes with session stats
+alias: 303_EV_Charging_Completed
+description: |
+  # EV Charging Monitor - Session Complete
+  1. Primary: Detects charging session completion
+  2. Safety: Validates final state and energy metrics
+  3. Monitoring: Records session statistics
+  4. Analysis: Provides energy and cost metrics
 triggers:
-  - entity_id: sensor.evse_eveus_state
-    from: Charging
+  - entity_id: sensor.evse_time_to_target_soc
+    to: Not charging
+    id: charging_complete
     trigger: state
 conditions:
   - condition: template
     value_template: >
-      {% set valid_states = ['unknown', 'Invalid capacity', 'unavailable'] %}
+      {% set invalid_states = ['unknown', 'Invalid capacity', 'unavailable'] %}
       {{ 
-        current_soc not in valid_states and
-        soc_kwh not in ['unknown', 'unavailable'] and
-        evse_state != 4 and
-        trigger.from_state.state == 'Charging' and
-        session_energy > 0
+        states('sensor.ev_soc_percent') not in invalid_states and
+        states('sensor.ev_soc_kwh') not in invalid_states and
+        energy_added > 0
       }}
 actions:
   - data:
-      title: "*EV Charging* 🔋 *Session Completed*"
+      title: "*EV* 🔋 *Charging Complete*"
       message: >
-        {% set initial_energy = soc_kwh - session_energy %}
+        🕒 Session Time: {{ session_time }}
 
-        {% set soc_increase = current_soc - initial_soc %}
+        🔋 SoC: {{ initial_soc }}% → {{ final_soc }}% (+{{ soc_increase }}%)
 
-        {% set efficiency = (session_energy / session_energy * 100)|round(1) if
-        session_energy > 0 else 0 %}
+        ⚡ Energy: {{ initial_kwh }} → {{ final_kwh }}kWh (+{{ energy_added }})
 
-        {% set corrected_efficiency = efficiency * (1 - correction / 100) %}
-
-
-        🕒 Duration: {{ session_time }}
-
-        🔋 SoC: {{ initial_soc|round(0) }}% → {{ current_soc|round(0) }}% (+{{
-        soc_increase|round(0) }}%)
-
-        ⚡ Energy: {{ initial_energy|round(1) }}kWh → {{ soc_kwh|round(1) }}kWh
-        (+{{ session_energy|round(1) }}kWh)
-
-        📊 Efficiency: {{ corrected_efficiency|round(1) }}%
-
-        💸 Cost: {{ session_cost|round(0) }}₴
-    action: notify.<NOTIFICATION_SERVICE_NAME>
+        💸 Cost: {{ session_cost }}₴
+    action: <NOTIFICATION_SERVICE_NAME>
 variables:
-  evse_state: "{{ state_attr('sensor.evse_eveus', 'state')|int(0) }}"
-  session_energy: "{{ states('sensor.evse_eveus_counter_a_energy')|float(0) }}"
   session_time: "{{ states('sensor.evse_eveus_newsessiontime') }}"
-  session_cost: "{{ states('sensor.evse_eveus_counter_a_cost')|float(0) }}"
-  current_soc: "{{ states('sensor.ev_soc_percent')|float(0) }}"
-  soc_kwh: "{{ states('sensor.ev_soc_kwh')|float(0) }}"
-  initial_soc: "{{ states('input_number.initial_ev_soc')|float(0) }}"
-  correction: "{{ states('input_number.ev_soc_correction')|float(0) }}"
+  initial_soc: "{{ states('input_number.initial_ev_soc')|float(0)|round(0) }}"
+  final_soc: "{{ states('sensor.ev_soc_percent')|float(0)|round(0) }}"
+  initial_kwh: >-
+    {{ (states('sensor.ev_soc_kwh')|float(0) -
+    states('sensor.evse_eveus_counter_a_energy')|float(0))|round(1) }}
+  final_kwh: "{{ states('sensor.ev_soc_kwh')|float(0)|round(1) }}"
+  energy_added: "{{ states('sensor.evse_eveus_counter_a_energy')|float(0)|round(1) }}"
+  session_cost: "{{ states('sensor.evse_eveus_counter_a_cost')|float(0)|round(0) }}"
+  soc_increase: "{{ (final_soc - initial_soc)|round(0) }}"
 mode: single
 max_exceeded: silent
+
 ```
 ### Current Change Notification
 Create an automation in Home Assistant by using the code below. Replace <NOTIFICATION_SERVICE_NAME> with your notification service name
 ```
-alias: EV Charging - Current Changed Notification
-description: Notify when charging current changes during active charging
+alias: EV_Charging_CurrentChanged
+description: |
+  # EV Charging Monitor - Current Changes
+  1. Primary: Monitors charging current adjustments
+  2. Safety: Validates charging state
+  3. Monitoring: Tracks charging progress and estimates
+  4. Notification: Updates on charging parameter changes
 triggers:
   - entity_id: sensor.evse_eveus_currentset
+    id: current_trigger
     trigger: state
 conditions:
   - condition: template
     value_template: >
-      {% set valid_states = ['unknown', 'Invalid capacity', 'unavailable'] %}
-      {{ 
-        current_soc not in valid_states and
-        evse_state == 4 and
-        trigger.from_state.state|float(0) != trigger.to_state.state|float(0) and
-        (current >= 6 and current <= 32) and
-        time_to_target not in ['Invalid target', 'Invalid capacity']
+      {% set invalid_states = ['unknown', 'Invalid capacity', 'unavailable',
+      'Not charging', 'Invalid target'] %} {{ 
+        time_to_target not in invalid_states and 
+        6 <= current <= 32 and
+        is_current_changed
       }}
 actions:
   - delay:
       minutes: 1
   - data:
-      title: "*EV Charging* 🔌 *Current Changed*"
+      title: "*EV* 🔌 *Current Changed to {{ current|round(0) }}A*"
       message: >
-        {% set soc_delta = target_soc - current_soc %}
-
-        {% set eta_message = time_to_target %}
-
-        {% if time_to_target not in ['unknown', '', 'unavailable', 'Not
-        charging', 'Target reached', 'Invalid target', 'Invalid capacity',
-        'Insufficient power'] %}
-          {% set hours = time_to_target.split('h')[0]|int(0) if 'h' in time_to_target else 0 %}
-          {% set minutes = time_to_target.split('h')[1].split('m')[0]|int(0) if 'h' in time_to_target else time_to_target.split('m')[0]|int(0) %}
-          {% set completion_time = now() + timedelta(hours=hours, minutes=minutes) %}
-          {% set eta_message = completion_time.strftime('%H:%M %d.%m.%Y') + ' (in ' + time_to_target + ')' %}
-        {% endif %}
-
-
-        🔌 Current: {{ current|round(0) }}A
+        ⏰ ETA: {{ time_to_target }}
 
         🔋 SoC: {{ current_soc|round(0) }}% → {{ target_soc|round(0) }}% (+{{
         soc_delta|round(0) }}%)
-
-        ⏰ ETA: {{ eta_message }}
     action: notify.<NOTIFICATION_SERVICE_NAME>
 variables:
-  evse_state: "{{ state_attr('sensor.evse_eveus', 'state')|int(0) }}"
+  current: "{{ states('sensor.evse_eveus_currentset')|float(0) }}"
   current_soc: "{{ states('sensor.ev_soc_percent')|float(0) }}"
   target_soc: "{{ states('input_number.target_soc')|float(0) }}"
-  current: "{{ states('sensor.evse_eveus_currentset')|float(0) }}"
   time_to_target: "{{ states('sensor.evse_time_to_target_soc') }}"
+  soc_delta: "{{ target_soc - current_soc }}"
+  is_current_changed: |
+    {{ 
+      trigger.id == 'current_trigger' and 
+      trigger.from_state.state != trigger.to_state.state 
+    }}
 mode: single
 max_exceeded: silent
+
 ```
 
 ## SOC Calculation Guide

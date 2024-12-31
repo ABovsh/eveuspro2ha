@@ -682,230 +682,131 @@ entities:
     icon: mdi:reload
 show_header_toggle: false
 ```
-![Screenshot 2024-12-09 204029](https://github.com/user-attachments/assets/87db7d47-08ab-4098-b877-e57b3bdc6c25)
 ### Advanced UI Elements
-#### Slider Controls
-1. Install slider button card from this repo - https://github.com/mattieha/slider-button-card
-2. Create sliders by using this code:
-```
-type: horizontal-stack
-cards:
-  - type: custom:slider-button-card
-    entity: input_number.evse_eveus_current
-    name: Current
-    compact: true
-    slider:
-      direction: left-right
-      background: gradient
-      use_state_color: true
-      show_track: true
-      min: 8
-      max: 16
-      step: 1
-    icon:
-      show: true
-      icon: mdi:flash
-      tap_action:
-        action: more-info
-    show_name: true
-    show_state: true
-    show_attribute: false
-    action_button:
-      show: false
-    style: |
-      .card-header {
-        font-size: 12px;  # Reduced font size for compact mode
-        font-weight: bold;
-      }
-      .slider-button-card .slider {
-        margin-top: 5px;  # Add space between the name and the slider
-      }
-  - type: custom:slider-button-card
-    entity: input_number.initial_ev_soc
-    name: Init SOC
-    compact: true
-    slider:
-      direction: left-right
-      background: gradient
-      use_state_color: true
-      show_track: true
-      min: 0
-      max: 100
-      step: 1
-    icon:
-      show: true
-      icon: mdi:battery
-      tap_action:
-        action: more-info
-    show_name: true
-    show_state: true
-    show_attribute: false
-    action_button:
-      show: false
-    style: |
-      .card-header {
-        font-size: 12px;  # Reduced font size for compact mode
-        font-weight: bold;
-      }
-      .slider-button-card .slider {
-        margin-top: 5px;  # Add space between the name and the slider
-      }
+![Screenshot_20241231_213946_Home Assistant](https://github.com/user-attachments/assets/62b55d07-497f-44a0-bba6-66a3a80dad86)
 
+- **Real-time EV data**: Displays current SOC (State of Charge), time to target SOC, and charging current.
+- **Tap Actions**: 
+  - **Single Tap**: Show more detailed information for each sensor (e.g., SOC, current).
+  - **Long Tap**: **Set Initial SOC for long tap on the SOC button and Charge Current for the Current button**
+- **Color-coded indicators**: Dynamically change colors based on sensor values for easy status recognition.
+- **Interactive controls**: Toggle switches to reset the counter, start a one-time charge, or stop charging.
+
+#### Installation
+
+1. **Install Mushroom Cards**:
+   Follow the [Mushroom Cards installation guide](https://github.com/piitaya/lovelace-mushroom).
+
+2. **Copy the YAML Configuration**:
+   Add the provided YAML code to your Home Assistant Lovelace UI.
 ```
-![Screenshot 2024-12-09 205257](https://github.com/user-attachments/assets/2cab6384-b60c-4bec-bf51-7e5641d251e4)
-#### Action Buttons
-1. Install button-card from this repo - https://github.com/custom-cards/button-card
-2. Create buttons by using this code:
-```
-type: horizontal-stack
+type: grid
+columns: 3
+square: false
 cards:
-  - type: custom:button-card
+  - type: custom:mushroom-template-badge
+    entity: sensor.ev_soc_percent
+    icon: mdi:battery-charging
+    color: |
+      {% if is_state('sensor.evse_eveus_state', 'Charging') %}
+        {% set soc = states('sensor.ev_soc_percent')|float(0) %}
+        {% if soc < 20 %}red
+        {% elif soc <= 50 %}orange
+        {% else %}green{% endif %}
+      {% else %}gray{% endif %}
+    label: "{{ states('sensor.ev_soc_percent') }}%"
+    content: SOC
+    tap_action:
+      action: more-info
+    hold_action:
+      action: more-info
+      entity: input_number.initial_ev_soc
+  - type: custom:mushroom-template-badge
+    entity: sensor.evse_time_to_target_soc
+    icon: mdi:timer-outline
+    color: |
+      {% if is_state('sensor.evse_time_to_target_soc', 'unavailable') %}
+        gray
+      {% else %}
+        {% set time = states('sensor.evse_time_to_target_soc') %}
+        {% set hours = time|regex_findall_index('\\d+h')|int(0) %}
+        {% if hours < 2 %}green
+        {% elif hours <= 6 %}orange
+        {% else %}red{% endif %}
+      {% endif %}
+    label: "{{ states('sensor.evse_time_to_target_soc') }}"
+    content: Time
+    tap_action:
+      action: more-info
+  - type: custom:mushroom-template-badge
+    entity: input_number.evse_eveus_current
+    icon: mdi:flash
+    color: |
+      {% if is_state('sensor.evse_eveus_state', 'Charging') %}
+        {% set current = states('input_number.evse_eveus_current')|float(0) %}
+        {% if current > 12 %}
+          red
+        {% elif current > 8 %}
+          orange
+        {% else %}
+          green
+        {% endif %}
+      {% else %}
+        gray
+      {% endif %}
+    label: "{{ states('input_number.evse_eveus_current') }}A"
+    content: Current
+    tap_action:
+      action: more-info
+    hold_action:
+      action: call-service
+      service: input_number.set_value
+      target:
+        entity_id: input_number.evse_eveus_current
+  - type: custom:mushroom-template-badge
     entity: switch.evse_reset_counter_a
-    name: Reset
-    icon: mdi:reload
-    size: 30%
-    color_type: card
-    color: "#3949AB"
-    styles:
-      card:
-        - border-radius: 12px
-        - height: 55px
-        - padding: 4px
-        - margin: 2px
-      name:
-        - font-size: 12px
-        - font-weight: bold
-        - padding-top: 4px
-        - color: "#43749f"
-      icon:
-        - width: 24px
-        - color: "#FFFFFF"
+    icon: mdi:backup-restore
+    color: |
+      {% if is_state('switch.evse_reset_counter_a', 'on') %}
+        #3949AB
+      {% else %}
+        gray
+      {% endif %}
+    content: CounterA Rst
     tap_action:
       action: toggle
       confirmation:
-        text: Reset the energy counter?
-      haptic: light
-    hold_action:
-      action: more-info
-      haptic: light
-    state:
-      - value: "off"
-        styles:
-          card:
-            - background-color: transparent
-          icon:
-            - color: "#43749f"
-          name:
-            - color: "#43749f"
-      - value: "on"
-        styles:
-          card:
-            - opacity: 0.7
-            - background-color: "#FF5722"
-          name:
-            - color: "#FFFFFF"
-  - type: custom:button-card
+        text: Reset counter A?
+  - type: custom:mushroom-template-badge
     entity: switch.evse_one_charge
-    name: Charge
     icon: mdi:ev-station
-    size: 35%
-    color_type: card
-    color: "#2E7D32"
+    color: |
+      {% if is_state('switch.evse_one_charge', 'on') %}
+        #2E7D32
+      {% else %}
+        gray
+      {% endif %}
+    content: OneCharge
     tap_action:
       action: toggle
-      haptic: light
-    hold_action:
-      action: more-info
-      haptic: light
-    styles:
-      card:
-        - border-radius: 12px
-        - height: 55px
-        - padding: 4px
-        - margin: 2px
-      name:
-        - font-size: 12px
-        - font-weight: bold
-        - padding-top: 4px
-        - color: "#FFFFFF"
-      icon:
-        - width: 30px
-        - color: "#43749f"
-    state:
-      - value: "off"
-        styles:
-          card:
-            - background-color: transparent
-          icon:
-            - color: "#43749f"
-          name:
-            - color: "#43749f"
-      - value: "on"
-        color: "#388E3C"
-        styles:
-          card:
-            - background-color: "#2E7D32"
-            - animation: pulse 2s infinite
-          name:
-            - color: "#FFFFFF"
-          icon:
-            - color: "#FFFFFF"
-  - type: custom:button-card
+  - type: custom:mushroom-template-badge
     entity: switch.evse_stop_charging
-    name: Stop
-    icon: mdi:stop-circle-outline
-    size: 35%
-    color_type: card
-    color: "#C62828"
+    icon: mdi:stop-circle
+    color: |
+      {% if is_state('switch.evse_stop_charging', 'on') %}
+        #C62828
+      {% else %}
+        gray
+      {% endif %}
+    content: StopCharge
     tap_action:
       action: toggle
       confirmation:
-        text: Stop charging session?
-      haptic: light
-    hold_action:
-      action: more-info
-      haptic: light
-    styles:
-      card:
-        - border-radius: 12px
-        - height: 55px
-        - padding: 4px
-        - margin: 2px
-      name:
-        - font-size: 12px
-        - font-weight: bold
-        - padding-top: 4px
-        - color: "#FFFFFF"
-      icon:
-        - width: 30px
-        - color: "#43749f"
-    state:
-      - value: "off"
-        styles:
-          card:
-            - background-color: transparent
-          icon:
-            - color: "#43749f"
-          name:
-            - color: "#43749f"
-      - value: "on"
-        color: "#D32F2F"
-        styles:
-          card:
-            - background-color: "#C62828"
-            - animation: pulse 1s infinite
-          name:
-            - color: "#FFFFFF"
-          icon:
-            - color: "#FFFFFF"
+        text: Stop charging?
 ```
-1. Enabled:
-![Screenshot 2024-12-10 001923](https://github.com/user-attachments/assets/e13c5f36-251b-4590-92bb-1059396461d0)
-2. Disabled:
-![Screenshot 2024-12-10 002041](https://github.com/user-attachments/assets/8dfec758-743c-4781-9e6a-c6a1eeb2db75)
 ## Notifications
 This section provides YAML configurations for setting up notifications in Home Assistant for various events during an EV charging session. Below are the available automations and their purposes. Use **Settings > Automations** to add these. 
-![Screenshot_20241230_210929_Telegram](https://github.com/user-attachments/assets/60a3c203-4817-46c4-9bb8-6030d215b847)
+![Screenshot_20241231_214300_Telegram](https://github.com/user-attachments/assets/d2bf4866-bf4e-4bc0-8415-e3c6d6d7b0e9)
 ### Session Start Notification
 To notify when an EV charging session starts, use the YAML configuration provided in [301_EV_Charging_Started](https://github.com/ABovsh/eveuspro2ha/blob/main/301_EV_Charging_Started). This automation monitors when an EV charging session begins. Replace `<NOTIFICATION_SERVICE_NAME>` with your notification service name.
 ### Session Complete Notification

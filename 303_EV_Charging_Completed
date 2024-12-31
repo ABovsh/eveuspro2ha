@@ -1,0 +1,68 @@
+alias: 303_EV_Charging_Completed
+description: |
+  # EV Charging Monitor - Session Complete
+  1. Primary: Detects charging session completion
+  2. Safety: Validates final charging states
+  3. Monitoring: Records final session metrics
+  4. Analysis: Provides cost and energy summaries
+
+  Version: 1.3.1
+  Last Updated: 2024-12-31
+triggers:
+  - entity_id: sensor.evse_eveus_state
+    from: Charging
+    to:
+      - Charge Complete
+      - Standby
+      - Connected
+    id: charging_complete
+    trigger: state
+conditions:
+  - condition: and
+    conditions:
+      - condition: template
+        value_template: >
+          {% set vars = namespace() %} {% set vars.is_valid = true %} {% set
+          vars.invalid_states = ['unknown', 'unavailable', 'none'] %} {% set
+          required_entities = [
+            'sensor.ev_soc_percent',
+            'sensor.evse_eveus_counter_a_cost'
+          ] %}
+
+          {% for entity_id in required_entities %}
+            {% if states(entity_id) in vars.invalid_states %}
+              {% set vars.is_valid = false %}
+            {% endif %}
+          {% endfor %}
+
+          {{ vars.is_valid }}
+      - condition: template
+        value_template: >
+          {% set final_soc = states('sensor.ev_soc_percent')|float(0) %} {% set
+          initial_soc = states('input_number.initial_ev_soc')|float(0) %} {{
+          final_soc > initial_soc }}
+actions:
+  - data:
+      title: EV 🔋 Charging Complete
+      message: >
+        🕒 Session Time: {{ session_time }}
+
+        🔋 SoC: {{ initial_soc|round(0) }}% → {{ final_soc|round(0) }}% (+{{
+        soc_increase|round(0) }}%)
+
+        ⚡ Energy: {{ initial_kwh }} → {{ final_kwh }}kWh (+{{ energy_added }})
+
+        💸 Cost: {{ session_cost }}₴
+    action: notify.<NOTIFICATION_SERVICE_NAME>
+variables:
+  session_time: "{{ states('sensor.evse_eveus_newsessiontime') }}"
+  session_cost: "{{ states('sensor.evse_eveus_counter_a_cost')|float(0)|round(0) }}"
+  battery_capacity: "{{ states('input_number.ev_battery_capacity')|float(0) }}"
+  initial_soc: "{{ states('input_number.initial_ev_soc')|float(0) }}"
+  final_soc: "{{ states('sensor.ev_soc_percent')|float(0) }}"
+  soc_increase: "{{ final_soc - initial_soc }}"
+  initial_kwh: "{{ (battery_capacity * initial_soc / 100)|round(1) }}"
+  final_kwh: "{{ (battery_capacity * final_soc / 100)|round(1) }}"
+  energy_added: "{{ (final_kwh - initial_kwh)|round(1) }}"
+mode: single
+max_exceeded: silent

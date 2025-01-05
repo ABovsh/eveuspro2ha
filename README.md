@@ -323,12 +323,6 @@ Add these sensors to your /config/configuration.yaml file:
       unit_of_measurement: "kWh"
       friendly_name: "Session Energy"
 
-    # Sensor for session time
-    evse_eveus_sessiontime:
-      value_template: "{{ state_attr('sensor.evse_eveus', 'sessionTime') }}"
-      unit_of_measurement: "s"
-      friendly_name: "Session Time"
-
     # Sensor for total energy
     evse_eveus_totalenergy:
       value_template: "{{ (state_attr('sensor.evse_eveus', 'totalEnergy') | float) | round(1) }}"

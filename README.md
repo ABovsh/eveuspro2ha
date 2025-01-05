@@ -534,25 +534,15 @@ Add to your /config/configuration.yaml:
 ```
 command_line:
   - switch:
-      name: "Eveus Reset Counter A"
-      unique_id: evse_eveus_reset_counter_a
+      name: "Evse Reset Counter A"
+      unique_id: evse_reset_counter_a
       icon: mdi:counter
       command_on: >
-        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
-        -H "Content-type: application/x-www-form-urlencoded" 
-        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
-        -d "pageevent=rstEM1&rstEM1=0" 
-        || echo "ERROR"
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=rstEM1&rstEM1=0" || echo "ERROR"
       command_off: >
-        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
-        -H "Content-type: application/x-www-form-urlencoded" 
-        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
-        -d "pageevent=rstEM1&rstEM1=0" 
-        || echo "ERROR"
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=rstEM1&rstEM1=0" || echo "ERROR"
       command_state: >-
-        (curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
-        "http://<EVEUS_IP_ADDRESS>/main" 
-        | jq -r "if .IEM1 != null then .IEM1 else \"ERROR\" end") 2>/dev/null || echo "ERROR"
+        (curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r "if .IEM1 != null then .IEM1 else \"ERROR\" end") 2>/dev/null || echo "ERROR"
       value_template: >-
         {% if value in ['ERROR', 'null', '', 'undefined'] %}
           false
@@ -561,25 +551,15 @@ command_line:
         {% endif %}
 
   - switch:
-      name: "Charging Control"
-      unique_id: evse_eveus_stop_charging
+      name: "Evse Stop Charging" 
+      unique_id: evse_stop_charging
       icon: mdi:ev-station
       command_on: >
-        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
-        -H "Content-type: application/x-www-form-urlencoded" 
-        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
-        -d "pageevent=evseEnabled&evseEnabled=1" 
-        || echo "ERROR"
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=evseEnabled&evseEnabled=1" || echo "ERROR"
       command_off: >
-        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
-        -H "Content-type: application/x-www-form-urlencoded" 
-        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
-        -d "pageevent=evseEnabled&evseEnabled=0" 
-        || echo "ERROR"
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=evseEnabled&evseEnabled=0" || echo "ERROR"
       command_state: >-
-        (curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
-        "http://<EVEUS_IP_ADDRESS>/main" 
-        | jq -r "if .evseEnabled != null then .evseEnabled else \"ERROR\" end") 2>/dev/null || echo "ERROR"
+        (curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r "if .evseEnabled != null then .evseEnabled else \"ERROR\" end") 2>/dev/null || echo "ERROR"
       value_template: >-
         {% if value in ['ERROR', 'null', '', 'undefined'] %}
           false
@@ -588,25 +568,15 @@ command_line:
         {% endif %}
 
   - switch:
-      name: "One Charge"
-      unique_id: evse_eveus_one_charge
+      name: "Evse One Charge" 
+      unique_id: evse_one_charge
       icon: mdi:lightning-bolt
       command_on: >
-        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
-        -H "Content-type: application/x-www-form-urlencoded" 
-        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
-        -d "pageevent=oneCharge&oneCharge=1" 
-        || echo "ERROR"
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=oneCharge&oneCharge=1" || echo "ERROR"
       command_off: >
-        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
-        -H "Content-type: application/x-www-form-urlencoded" 
-        "http://<EVEUS_IP_ADDRESS>/pageEvent" 
-        -d "pageevent=oneCharge&oneCharge=0" 
-        || echo "ERROR"
+        curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST -H "Content-type: application/x-www-form-urlencoded" "http://<EVEUS_IP_ADDRESS>/pageEvent" -d "pageevent=oneCharge&oneCharge=0" || echo "ERROR"
       command_state: >-
-        (curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST 
-        "http://<EVEUS_IP_ADDRESS>/main" 
-        | jq -r "if .oneCharge != null then .oneCharge else \"ERROR\" end") 2>/dev/null || echo "ERROR"
+        (curl -s --connect-timeout 2 --max-time 5 -u !secret eveus_username:!secret eveus_password -X POST "http://<EVEUS_IP_ADDRESS>/main" | jq -r "if .oneCharge != null then .oneCharge else \"ERROR\" end") 2>/dev/null || echo "ERROR"
       value_template: >-
         {% if value in ['ERROR', 'null', '', 'undefined'] %}
           false
